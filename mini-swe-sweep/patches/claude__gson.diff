@@ -1,0 +1,53 @@
+diff --git a/extras/src/main/java/com/google/gson/typeadapters/PostConstructAdapterFactory.java b/extras/src/main/java/com/google/gson/typeadapters/PostConstructAdapterFactory.java
+index 6d02b95..32757a4 100644
+--- a/extras/src/main/java/com/google/gson/typeadapters/PostConstructAdapterFactory.java
++++ b/extras/src/main/java/com/google/gson/typeadapters/PostConstructAdapterFactory.java
+@@ -33,7 +33,7 @@ public class PostConstructAdapterFactory implements TypeAdapterFactory {
+     // copied from https://gist.github.com/swankjesse/20df26adaf639ed7fd160f145a0b661a
+     @Override
+     public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> type) {
+-        for (Class<?> t = type.getRawType(); t != Object.class; t = t.getSuperclass()) {
++        for (Class<?> t = type.getRawType(); (t != Object.class) && (t != null); t = t.getSuperclass()) {
+             for (Method m : t.getDeclaredMethods()) {
+                 if (m.isAnnotationPresent(PostConstruct.class)) {
+                     m.setAccessible(true);
+diff --git a/gson/src/main/java/com/google/gson/GsonBuilder.java b/gson/src/main/java/com/google/gson/GsonBuilder.java
+index 0c917d4..ade482a 100644
+--- a/gson/src/main/java/com/google/gson/GsonBuilder.java
++++ b/gson/src/main/java/com/google/gson/GsonBuilder.java
+@@ -577,7 +577,7 @@ public final class GsonBuilder {
+     DefaultDateTypeAdapter dateTypeAdapter;
+     if (datePattern != null && !"".equals(datePattern.trim())) {
+       dateTypeAdapter = new DefaultDateTypeAdapter(datePattern);
+-    } else if (dateStyle != DateFormat.DEFAULT && timeStyle != DateFormat.DEFAULT) {
++    } else if (dateStyle != DateFormat.DEFAULT || timeStyle != DateFormat.DEFAULT) {
+       dateTypeAdapter = new DefaultDateTypeAdapter(dateStyle, timeStyle);
+     } else {
+       return;
+diff --git a/gson/src/main/java/com/google/gson/stream/JsonReader.java b/gson/src/main/java/com/google/gson/stream/JsonReader.java
+index 9c55c43..2fde623 100644
+--- a/gson/src/main/java/com/google/gson/stream/JsonReader.java
++++ b/gson/src/main/java/com/google/gson/stream/JsonReader.java
+@@ -728,7 +728,8 @@ public class JsonReader implements Closeable {
+     }
+ 
+     // We've read a complete number. Decide if it's a PEEKED_LONG or a PEEKED_NUMBER.
+-    if (last == NUMBER_CHAR_DIGIT && fitsInLong && (value != Long.MIN_VALUE || negative)) {
++    if (last == NUMBER_CHAR_DIGIT && fitsInLong && (value != Long.MIN_VALUE || negative)
++        && (value != 0 || !negative)) {
+       peekedLong = negative ? value : -value;
+       pos += i;
+       return peeked = PEEKED_LONG;
+diff --git a/gson/src/main/java/com/google/gson/stream/JsonWriter.java b/gson/src/main/java/com/google/gson/stream/JsonWriter.java
+index e2fc196..418a5aa 100644
+--- a/gson/src/main/java/com/google/gson/stream/JsonWriter.java
++++ b/gson/src/main/java/com/google/gson/stream/JsonWriter.java
+@@ -491,7 +491,7 @@ public class JsonWriter implements Closeable, Flushable {
+    * @return this writer.
+    */
+   public JsonWriter value(double value) throws IOException {
+-    if (Double.isNaN(value) || Double.isInfinite(value)) {
++    if (!lenient && (Double.isNaN(value) || Double.isInfinite(value))) {
+       throw new IllegalArgumentException("Numeric values must be finite, but was " + value);
+     }
+     writeDeferredName();

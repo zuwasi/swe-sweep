@@ -1,0 +1,399 @@
+diff --git a/src/api/api_ast.cpp b/src/api/api_ast.cpp
+index ded8b7089..f16493c5a 100644
+--- a/src/api/api_ast.cpp
++++ b/src/api/api_ast.cpp
+@@ -1326,6 +1326,7 @@ extern "C" {
+             case OP_SEQ_NTH: return Z3_OP_SEQ_NTH;
+             case OP_SEQ_LENGTH: return Z3_OP_SEQ_LENGTH;
+             case OP_SEQ_INDEX: return Z3_OP_SEQ_INDEX;
++            case OP_SEQ_LAST_INDEX: return Z3_OP_SEQ_LAST_INDEX;
+             case OP_SEQ_TO_RE: return Z3_OP_SEQ_TO_RE;
+             case OP_SEQ_IN_RE: return Z3_OP_SEQ_IN_RE;
+             case OP_SEQ_MAP: return Z3_OP_SEQ_MAP;
+@@ -1345,7 +1346,7 @@ extern "C" {
+             case _OP_STRING_SUBSTR: return Z3_OP_SEQ_EXTRACT;
+             case _OP_STRING_STRIDOF: return Z3_OP_SEQ_INDEX;
+             case _OP_REGEXP_EMPTY: return Z3_OP_RE_EMPTY_SET;
+-            case _OP_REGEXP_FULL_CHAR: return Z3_OP_RE_FULL_SET;
++            case _OP_REGEXP_FULL_CHAR: return Z3_OP_RE_FULL_CHAR_SET;
+ 
+             case OP_STRING_STOI: return Z3_OP_STR_TO_INT;
+             case OP_STRING_ITOS: return Z3_OP_INT_TO_STR;
+diff --git a/src/api/api_tactic.cpp b/src/api/api_tactic.cpp
+index e0038d8b7..b0e9f82f5 100644
+--- a/src/api/api_tactic.cpp
++++ b/src/api/api_tactic.cpp
+@@ -516,7 +516,7 @@ extern "C" {
+         Z3_TRY;
+         LOG_Z3_apply_result_get_subgoal(c, r, i);
+         RESET_ERROR_CODE();
+-        if (i > to_apply_result(r)->m_subgoals.size()) {
++        if (i >= to_apply_result(r)->m_subgoals.size()) {
+             SET_ERROR_CODE(Z3_IOB, nullptr);
+             RETURN_Z3(nullptr);
+         }
+diff --git a/src/api/c++/z3++.h b/src/api/c++/z3++.h
+index 08dc1489f..6ab8b2437 100644
+--- a/src/api/c++/z3++.h
++++ b/src/api/c++/z3++.h
+@@ -4257,7 +4257,7 @@ namespace z3 {
+     }
+ 
+     inline expr set_member(expr const& s, expr const& e) {
+-        MK_EXPR2(Z3_mk_set_member, s, e);
++        MK_EXPR2(Z3_mk_set_member, e, s);
+     }
+ 
+     inline expr set_subset(expr const& a, expr const& b) {
+diff --git a/src/api/python/z3/z3.py b/src/api/python/z3/z3.py
+index f859ab961..ea8e78823 100644
+--- a/src/api/python/z3/z3.py
++++ b/src/api/python/z3/z3.py
+@@ -1898,7 +1898,8 @@ def BoolVector(prefix, sz, ctx=None):
+     >>> And(P)
+     And(p__0, p__1, p__2)
+     """
+-    return [Bool("%s__%s" % (prefix, i)) for i in range(sz)]
++    ctx = _get_ctx(ctx)
++    return [Bool("%s__%s" % (prefix, i), ctx) for i in range(sz)]
+ 
+ 
+ def FreshBool(prefix="b", ctx=None):
+@@ -9719,7 +9720,7 @@ def set_default_rounding_mode(rm, ctx=None):
+     if is_fprm_value(rm):
+         _dflt_rounding_mode = rm.kind()
+     else:
+-        _z3_assert(_dflt_rounding_mode in _ROUNDING_MODES, "illegal rounding mode")
++        _z3_assert(rm in _ROUNDING_MODES, "illegal rounding mode")
+         _dflt_rounding_mode = rm
+ 
+ 
+diff --git a/src/api/python/z3/z3util.py b/src/api/python/z3/z3util.py
+index 993abef58..c9274ac43 100644
+--- a/src/api/python/z3/z3util.py
++++ b/src/api/python/z3/z3util.py
+@@ -231,10 +231,10 @@ def prove(claim, assume=None, verbose=0):
+     """
+ 
+     if z3_debug():
+-        assert not assume or is_expr(assume)
++        assert assume is None or is_expr(assume)
+ 
+     to_prove = claim
+-    if assume:
++    if assume is not None:
+         if z3_debug():
+             is_proved, _ = prove(Not(assume))
+ 
+@@ -494,7 +494,7 @@ def model_str(m, as_str=True):
+ 
+     if m:
+         vs = [(v, m[v]) for v in m]
+-        vs = sorted(vs, key=lambda a, _: str(a))
++        vs = sorted(vs, key=lambda a: str(a[0]))
+         if as_str:
+             return "\n".join(["{} = {}".format(k, v) for (k, v) in vs])
+         else:
+diff --git a/src/ast/rewriter/arith_rewriter.cpp b/src/ast/rewriter/arith_rewriter.cpp
+index 228a38f86..d5957a8b1 100644
+--- a/src/ast/rewriter/arith_rewriter.cpp
++++ b/src/ast/rewriter/arith_rewriter.cpp
+@@ -842,8 +842,10 @@ br_status arith_rewriter::mk_and_core(unsigned n, expr* const* args, expr_ref& r
+         ptr_buffer<expr> rest;
+         for (unsigned i = 1; i < n; ++i) {
+             if (m_util.is_le(args[i], z, u) && u == y && m_util.is_numeral(z, b)) {
+-                if (b > a)
++                if (b > a) {
+                     arg0 = args[i];
++                    a = b;
++                }
+             }
+             else
+                 rest.push_back(args[i]);
+@@ -1581,13 +1583,13 @@ br_status arith_rewriter::mk_ashr_core(unsigned sz, expr* arg1, expr* arg2, expr
+             if (y >= sz)
+                 result = m_util.mk_int(N-1);
+             else
+-                result = m_util.mk_int(d);
++                result = m_util.mk_int(mod(d - rational::power_of_two(sz - y.get_unsigned()), N));
+         }
+         else {
+             if (y >= sz) 
+                 result = m_util.mk_int(0);
+             else 
+-                result = m_util.mk_int(mod(d - rational::power_of_two(sz - y.get_unsigned()), N));
++                result = m_util.mk_int(d);
+         }
+         return BR_DONE;
+     }
+diff --git a/src/ast/rewriter/array_rewriter.cpp b/src/ast/rewriter/array_rewriter.cpp
+index 67f969197..211edb356 100644
+--- a/src/ast/rewriter/array_rewriter.cpp
++++ b/src/ast/rewriter/array_rewriter.cpp
+@@ -65,7 +65,7 @@ br_status array_rewriter::mk_app_core(func_decl * f, unsigned num_args, expr * c
+                 result = m().mk_eq(result, val);
+                 st = BR_REWRITE_FULL;
+             }
+-            else if (a == e1 && vindex.size() == num_args + 2) {
++            else if (a == e1 && vindex.size() == num_args - 2) {
+                 // a [i: = x] peq_{i} a -- > true
+                 bool all_eq = true;
+                 for (unsigned i = 0, sz = vindex.size(); all_eq && i < sz;
+diff --git a/src/ast/rewriter/seq_rewriter.cpp b/src/ast/rewriter/seq_rewriter.cpp
+index 86bb297e9..8c5814b28 100644
+--- a/src/ast/rewriter/seq_rewriter.cpp
++++ b/src/ast/rewriter/seq_rewriter.cpp
+@@ -1415,8 +1415,9 @@ br_status seq_rewriter::mk_seq_nth_i(expr* a, expr* b, expr_ref& result) {
+             auto [bounded, len1] = min_length(a);
+             if (!bounded)
+                 break;
+-            if (i + len1 < offset) {
+-                offset -= len1;
++            if (i + len1 <= offset) {
++                // skip the ite; the loop index advances by one element only
++                offset = offset + 1 - len1;
+                 continue;
+             }
+             expr_ref idx(m());
+@@ -1479,13 +1480,14 @@ br_status seq_rewriter::mk_seq_last_index(expr* a, expr* b, expr_ref& result) {
+         result = m().mk_ite(m().mk_eq(a, b), zero(), minus_one());
+         return BR_REWRITE_FULL;
+     case longer_c: {
+-        unsigned i = as.size();
++        unsigned const n = as.size();
++        unsigned i = n;
+         while (i >= bs.size()) {
+             switch (is_suffix(as, bs)) {
+             case l_undef:
+                 return BR_FAILED;
+             case l_true:
+-                result = m_autil.mk_sub(str().mk_length(a), m_autil.mk_int(bs.size() - i));
++                result = m_autil.mk_sub(str().mk_length(a), m_autil.mk_add(str().mk_length(b), m_autil.mk_int(n - i)));
+                 return BR_REWRITE3;
+             case l_false:
+                 as.pop_back();
+diff --git a/src/util/buffer.h b/src/util/buffer.h
+index de12b0f34..cabb5c6ca 100644
+--- a/src/util/buffer.h
++++ b/src/util/buffer.h
+@@ -139,13 +139,14 @@ public:
+     }
+ 
+     void set_end(iterator it) {
+-        m_pos = static_cast<unsigned>(it - m_buffer);
++        unsigned new_pos = static_cast<unsigned>(it - m_buffer);
+         if (CallDestructors) {
+             iterator e  = end();
+             for (; it != e; ++it) {
+                 it->~T();
+             }
+         }
++        m_pos = new_pos;
+     }
+     
+     const_iterator begin() const { 
+diff --git a/src/util/checked_int64.h b/src/util/checked_int64.h
+index 41ac88ef7..2764f4d97 100644
+--- a/src/util/checked_int64.h
++++ b/src/util/checked_int64.h
+@@ -56,7 +56,7 @@ public:
+     bool is_minus_one() const { return m_value == -1; }
+     bool is_nonneg() const { return m_value >= 0; }
+     bool is_nonpos() const { return m_value <= 0; }
+-    bool is_even() const { return 0 == (m_value ^ 0x1); }
++    bool is_even() const { return 0 == (m_value & 0x1); }
+     
+     static checked_int64 zero() { return ci(0); }
+     static checked_int64 one() { return ci(1); }
+@@ -144,7 +144,7 @@ public:
+             uint64_t x = static_cast<uint64_t>(m_value);
+             uint64_t y = static_cast<uint64_t>(other.m_value);
+             int64_t r = static_cast<int64_t>(x - y);
+-            if (m_value > 0 && other.m_value < 0 && r <= 0) 
++            if (m_value >= 0 && other.m_value < 0 && r < 0) 
+                 throw overflow_exception();
+             if (m_value < 0 && other.m_value > 0 && r >= 0) 
+                 throw overflow_exception();
+@@ -364,7 +364,7 @@ inline checked_int64<CHECK> gcd(checked_int64<CHECK> const& a, checked_int64<CHE
+     checked_int64<CHECK> _a = a;
+     checked_int64<CHECK> _b = b;
+     x = 0;
+-    y = 0;
++    y = 1;
+     checked_int64<CHECK> lastx = 1;
+     checked_int64<CHECK> lasty = 0;
+     while (_b != 0) {
+@@ -379,5 +379,7 @@ inline checked_int64<CHECK> gcd(checked_int64<CHECK> const& a, checked_int64<CHE
+         y = lasty - q * y;
+         lasty = temp;
+     }
++    x = lastx;
++    y = lasty;
+     return _a;
+ }
+diff --git a/src/util/gparams.cpp b/src/util/gparams.cpp
+index 33afb5af6..c7c0bdeab 100644
+--- a/src/util/gparams.cpp
++++ b/src/util/gparams.cpp
+@@ -65,7 +65,7 @@ static char const * g_params_renames[] = {
+     "pi_non_nested_arith_weight", "pi.non_nested_arith_weight",
+     "pi_warnings", "pi.warnings",
+     "pp_decimal", "pp.decimal",
+-    "pp_decimal", "pp.decimal_precision",
++    "pp_decimal_precision", "pp.decimal_precision",
+     "pp_bv_literals", "pp.bv_literals",
+     "pp_bv_neg", "pp.bv_neg",
+     "pp_max_depth", "pp.max_depth",
+diff --git a/src/util/min_cut.cpp b/src/util/min_cut.cpp
+index a21b7d4af..bc7644155 100644
+--- a/src/util/min_cut.cpp
++++ b/src/util/min_cut.cpp
+@@ -163,7 +163,7 @@ void min_cut::augment_path() {
+             }
+         }
+         if (!already_exists) {
+-            m_edges[k].push_back(edge(1, max));
++            m_edges[k].push_back(edge(l, max));
+         }
+         k = l;
+     }
+diff --git a/src/util/mpf.cpp b/src/util/mpf.cpp
+index 39941bdd3..c1ce19d5d 100644
+--- a/src/util/mpf.cpp
++++ b/src/util/mpf.cpp
+@@ -1641,7 +1641,7 @@ std::string mpf_manager::to_string_binary(mpf const & x, unsigned upper_extra, u
+     else if (is_inf(x))
+         res = std::string("") + "#b" + (sgn(x)?"1":"0") +  " " +
+               "#b" + std::string(x.ebits, '1') + " " +
+-              "#b" + std::string(x.sbits - 1, '0') + "1 " +
++              "#b" + std::string(x.sbits - 1, '0') + " " +
+               "(" + (sgn(x)?"-":"+") + "oo)";
+     else if (is_zero(x))
+         res = std::string("") + "#b" + (sgn(x) ? "1" : "0") + " " +
+diff --git a/src/util/mpff.cpp b/src/util/mpff.cpp
+index a0851bad6..eebbc92f6 100644
+--- a/src/util/mpff.cpp
++++ b/src/util/mpff.cpp
+@@ -346,7 +346,8 @@ void mpff_manager::set_core(mpff & n, mpz_manager<SYNCH> & m, mpz const & v) {
+         unsigned w_sz = w.size();
+         SASSERT(w_sz >= m_precision);
+         unsigned num_leading_zeros = nlz(w_sz, w.data());
+-        shl(w_sz, w.data(), num_leading_zeros, w_sz, w.data());
++        if (num_leading_zeros > 0)
++            shl(w_sz, w.data(), num_leading_zeros, w_sz, w.data());
+         unsigned * s = sig(n);
+         unsigned i = m_precision;
+         unsigned j = w_sz;
+@@ -363,6 +364,7 @@ void mpff_manager::set_core(mpff & n, mpz_manager<SYNCH> & m, mpz const & v) {
+                 if (w[j] != 0) {
+                     // imprecision detected.
+                     inc_significand(n);
++                    break;
+                 }
+             }
+             // it is precise
+@@ -1365,7 +1367,7 @@ void mpff_manager::display_smt2(std::ostream & out, mpff const & n, bool decimal
+         if (exp <= 63) {
+             uint64_t _exp = 1;
+             _exp <<= exp;
+-            out << _exp;
++            out << " " << _exp;
+             if (decimal) out << ".0";
+         }
+         else {
+diff --git a/src/util/mpfx.cpp b/src/util/mpfx.cpp
+index 9e2f0d06f..b443aa4a4 100644
+--- a/src/util/mpfx.cpp
++++ b/src/util/mpfx.cpp
+@@ -287,7 +287,7 @@ void mpfx_manager::set_core(mpfx & n, mpq_manager<SYNCH> & m, mpq const & v) {
+     else {
+         allocate_if_needed(n);
+         _scoped_numeral<mpz_manager<SYNCH> > tmp(m);
+-        n.m_sign = is_neg(n);
++        n.m_sign = m.is_neg(v);
+         m.mul2k(v.numerator(), 8 * sizeof(unsigned) * m_frac_part_sz, tmp);
+         m.abs(tmp);
+         if ((n.m_sign == 1) != m_to_plus_inf && !m.divides(v.denominator(), tmp)) {
+diff --git a/src/util/mpq_inf.h b/src/util/mpq_inf.h
+index d8e9148e1..f0c68b567 100644
+--- a/src/util/mpq_inf.h
++++ b/src/util/mpq_inf.h
+@@ -259,7 +259,7 @@ public:
+ 
+     void floor(mpq_inf const & a, mpq & b) {
+         if (m.is_int(a.first)) {
+-            if (m.is_neg(a.first))
++            if (m.is_neg(a.second))
+                 m.sub(a.first, mpq(1), b); // floor(k - delta*epsilon) --> k-1
+             else
+                 m.set(b, a.first);
+diff --git a/src/util/mpz.cpp b/src/util/mpz.cpp
+index 10c345b0c..69cfb0565 100644
+--- a/src/util/mpz.cpp
++++ b/src/util/mpz.cpp
+@@ -700,7 +700,7 @@ mpz mpz_manager<SYNCH>::mod2k(mpz const & a, unsigned k) {
+     ensure_mpz_t a1(a);
+     mk_big(result);
+     MPZ_BEGIN_CRITICAL();
+-    mpz_tdiv_r_2exp(*result.m_ptr, a1(), k);
++    mpz_fdiv_r_2exp(*result.m_ptr, a1(), k);
+     MPZ_END_CRITICAL();
+ #endif
+     return result;
+diff --git a/src/util/mpz.h b/src/util/mpz.h
+index 505bb177e..b13321d7d 100644
+--- a/src/util/mpz.h
++++ b/src/util/mpz.h
+@@ -554,7 +554,7 @@ public:
+     }
+ 
+     void set(mpz & a, uint64_t val) {
+-        if (val < INT_MAX) {
++        if (val <= INT_MAX) {
+             a.set(static_cast<int>(val));
+         }
+         else {
+diff --git a/src/util/prime_generator.cpp b/src/util/prime_generator.cpp
+index 9015123c8..20fc83fe1 100644
+--- a/src/util/prime_generator.cpp
++++ b/src/util/prime_generator.cpp
+@@ -92,7 +92,7 @@ uint64_t prime_generator::operator()(unsigned idx) {
+     process_next_k_numbers(1024);
+     if (idx < m_primes.size())
+         return m_primes[idx];
+-    while (idx <= m_primes.size())
++    while (idx >= m_primes.size())
+         process_next_k_numbers(1024*16);
+     return m_primes[idx];
+ }
+diff --git a/src/util/statistics.cpp b/src/util/statistics.cpp
+index 2c842dc09..9c8a5a8d6 100644
+--- a/src/util/statistics.cpp
++++ b/src/util/statistics.cpp
+@@ -175,11 +175,12 @@ static void display_internal(std::ostream & out, M const & m) {
+         if (*key == ':') key++;
+         while (*key) {
+             if ('a' <= *key && *key <= 'z')
+-                out << ('A' + (*key - 'a'));
++                out << static_cast<char>('A' + (*key - 'a'));
+             else if (*key == ' ')
+                 out << "_";
+             else
+                 out << *key;
++            key++;
+         }
+         out << " " << kv.m_value << "\n";
+     }
+diff --git a/src/util/util.h b/src/util/util.h
+index d580209e9..01dc634dc 100644
+--- a/src/util/util.h
++++ b/src/util/util.h
+@@ -138,7 +138,7 @@ static inline unsigned get_num_1bits(uint64_t v) {
+         v1 &= v1 - 1; 
+     }
+ #endif
+-    v = v - (v >> 1) & 0x5555555555555555;
++    v = v - ((v >> 1) & 0x5555555555555555);
+     v = (v & 0x3333333333333333) + ((v >> 2) & 0x3333333333333333); 
+     v = (v + (v >> 4)) & 0x0F0F0F0F0F0F0F0F;
+     uint64_t r = (v * 0x0101010101010101) >> 56;

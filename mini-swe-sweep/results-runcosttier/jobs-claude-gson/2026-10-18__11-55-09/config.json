@@ -1,0 +1,19 @@
+{
+    "job_name": "2026-10-18__11-55-09",
+    "jobs_dir": "/home/danie/mini-swe-sweep/results/jobs-claude-gson",
+    "verifier_timeout_multiplier": 0.42857142857142855,
+    "n_concurrent_trials": 1,
+    "agents": [
+        {
+            "name": "swesweep.patch_agent:PatchAgent",
+            "kwargs": {
+                "patch_path": "/home/danie/mini-swe-sweep/patches/claude__gson.diff"
+            }
+        }
+    ],
+    "tasks": [
+        {
+            "path": "/tmp/swe-sweep-task-8um6kkt4/swe-sweep__gson"
+        }
+    ]
+}

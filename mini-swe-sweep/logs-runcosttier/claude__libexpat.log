@@ -1,0 +1,34 @@
+Three review agents are still running; I'll act on their findings when they report.
+
+The agent reviewing the second half of xmlparse.c found nothing; I'm still waiting on the other two.
+
+I fixed nine bugs across four files. The code builds without warnings, both test suites (`runtests` and `runtestspp`) still pass, and spot checks confirmed the new behaviour.
+
+A full line-by-line review (by me and by three helper agents) found no obvious planted typos or wrong constants. So what I fixed are real defects in this code: integer overflows, unbounded recursion, missing validation, memory leaks and one wrong variable.
+
+**Library (`expat/lib`)**
+1. **`XML_GetBuffer`**: adding the kept context bytes to `neededSize` could overflow a signed int, giving a buffer that is too small. It now fails with an out-of-memory error instead.
+2. **`nextScaffoldPart`**: the size calculation for the `scaffIndex` allocation could overflow. I added a check.
+3. **`storeRawNames`**: the tag buffer size was computed in `int` and could overflow. It now uses `size_t` with a check.
+4. **`copyString`**: the length counter was an `int` and could overflow on very long strings. It is now `size_t`.
+5. **`dtdCopy`**: I added an overflow check before allocating the copied default attributes.
+6. **`build_model`**: building the content model recursively let a deeply nested `<!ELEMENT>` declaration overflow the stack and crash. I replaced it with an iterative version. Children are still stored next to each other, and a sample model `(a,(b|c)*,d?)` comes out with the correct tree.
+7. **Invalid UTF-8 in names**: malformed multi-byte sequences inside element and attribute names were accepted, because the name-character checks never verified the bytes were valid UTF-8. The checks now reject them, and so does the DTD tokenizer (`xmltok_impl.c`). The invalid-character macro also tolerates encodings that have no such check (`xmltok.c`). `<a\xC0\x80/>` is now rejected as an invalid token.
+8. **Namespace URIs containing the separator character** (`addBinding`): with a separator such as `'\n'`, a URI containing that character made the expanded names ambiguous. Such URIs are now rejected with a syntax error, unless the separator is itself a normal URI character such as `':'`.
+
+**xmlwf (`expat/xmlwf/xmlwf.c`)**
+9. Two fixes:
+   - **`nsattcmp`**: it compared `att1` with itself, so with `-n`, attributes without a namespace were not sorted before namespaced ones. It now compares `att2`.
+   - **Output file can't be opened**: the parser was never freed, and `outName` leaked on the stop-on-error path. Both are now freed.
+
+The namespace-separator change (item 8) is the one that alters behaviour for input that used to parse: documents with such URIs now fail. If you'd rather not reject them, it is easy to revert on its own.
+
+I fixed one more crash bug this round, in `expat/lib/xmlparse.c`, and found nothing else I could clearly show was wrong. The build has no warnings and both test suites (`runtests` and `runtestspp`) still pass.
+
+**New fix: shared DTD destroyed on a failed child-parser creation.** `XML_ExternalEntityParserCreate` creates a child parser that shares the parent's DTD. If copying the encoding name ran out of memory, the cleanup call destroyed that shared DTD. The parent parser was left pointing at freed memory, so later parsing could crash or corrupt the heap. The cleanup now leaves a shared DTD alone; nothing in the existing tests exercises this out-of-memory path.
+
+**Checks on last round's fixes:**
+- **Deep content model:** a document whose `<!ELEMENT>` declaration nests 500,000 groups now parses successfully with an element-declaration handler set, and the handler receives the correct model. Before the change, that much nesting would overflow the stack.
+- **Character conversion code:** I also re-read the encoding converters, the code that drops incomplete characters at the end of a buffer, the character-reference range checks, and the setup and teardown code. They look correct.
+
+Altogether there are now ten fixes across `xmlparse.c`, `xmltok.c`, `xmltok_impl.c` and `xmlwf/xmlwf.c`. The only one that changes results for input that used to parse is still the rejection of namespace URIs containing the separator character.

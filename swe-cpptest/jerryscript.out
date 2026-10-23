@@ -1,0 +1,23 @@
+Note: switching to '5fdeb7c1d68e8c5209e186e1760bc703a723d588'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+jerryscript: build incomplete (continuing with recorded TUs)
+wrote 265 entries to cc.bdf
+jerryscript [Recommended Rules]: Source Files to Check: 505, Violations Found: 401
+jerryscript [Flow Analysis Standard]: Source Files to Check: 505, Violations Found: 371
+jerryscript [Flow Analysis Aggressive]: Source Files to Check: 505, Violations Found: 743
+./run_cpptest.sh: line 35: unexpected EOF while looking for matching `"'

@@ -1,0 +1,152 @@
+diff --git a/src/main/java/io/reactivex/internal/operators/flowable/FlowableConcatMapEager.java b/src/main/java/io/reactivex/internal/operators/flowable/FlowableConcatMapEager.java
+index 87ee2357..8acad8ac 100644
+--- a/src/main/java/io/reactivex/internal/operators/flowable/FlowableConcatMapEager.java
++++ b/src/main/java/io/reactivex/internal/operators/flowable/FlowableConcatMapEager.java
+@@ -176,7 +176,12 @@ public final class FlowableConcatMapEager<T, R> extends AbstractFlowableWithUpst
+         }
+ 
+         void cancelAll() {
+-            InnerQueuedSubscriber<R> inner;
++            InnerQueuedSubscriber<R> inner = current;
++            current = null;
++
++            if (inner != null) {
++                inner.cancel();
++            }
+ 
+             while ((inner = subscribers.poll()) != null) {
+                 inner.cancel();
+diff --git a/src/main/java/io/reactivex/internal/operators/flowable/FlowableOnBackpressureError.java b/src/main/java/io/reactivex/internal/operators/flowable/FlowableOnBackpressureError.java
+index f60c43bc..556e54b8 100644
+--- a/src/main/java/io/reactivex/internal/operators/flowable/FlowableOnBackpressureError.java
++++ b/src/main/java/io/reactivex/internal/operators/flowable/FlowableOnBackpressureError.java
+@@ -65,6 +65,7 @@ public final class FlowableOnBackpressureError<T> extends AbstractFlowableWithUp
+                 downstream.onNext(t);
+                 BackpressureHelper.produced(this, 1);
+             } else {
++                upstream.cancel();
+                 onError(new MissingBackpressureException("could not emit value due to lack of requests"));
+             }
+         }
+diff --git a/src/main/java/io/reactivex/internal/operators/flowable/FlowableSwitchMap.java b/src/main/java/io/reactivex/internal/operators/flowable/FlowableSwitchMap.java
+index 9730bd38..bc1b9320 100644
+--- a/src/main/java/io/reactivex/internal/operators/flowable/FlowableSwitchMap.java
++++ b/src/main/java/io/reactivex/internal/operators/flowable/FlowableSwitchMap.java
+@@ -314,7 +314,9 @@ public final class FlowableSwitchMap<T, R> extends AbstractFlowableWithUpstream<
+                             if (r != Long.MAX_VALUE) {
+                                 requested.addAndGet(-e);
+                             }
+-                            inner.get().request(e);
++                            if (inner.fusionMode != QueueSubscription.SYNC) {
++                                inner.get().request(e);
++                            }
+                         }
+                     }
+ 
+diff --git a/src/main/java/io/reactivex/internal/operators/flowable/FlowableTakeLast.java b/src/main/java/io/reactivex/internal/operators/flowable/FlowableTakeLast.java
+index 60318d0b..73390786 100644
+--- a/src/main/java/io/reactivex/internal/operators/flowable/FlowableTakeLast.java
++++ b/src/main/java/io/reactivex/internal/operators/flowable/FlowableTakeLast.java
+@@ -119,6 +119,10 @@ public final class FlowableTakeLast<T> extends AbstractFlowableWithUpstream<T, T
+                             a.onNext(v);
+                             e++;
+                         }
++                        if (isEmpty()) {
++                            a.onComplete();
++                            return;
++                        }
+                         if (e != 0L && r != Long.MAX_VALUE) {
+                             r = requested.addAndGet(-e);
+                         }
+diff --git a/src/main/java/io/reactivex/internal/operators/observable/ObservableConcatMapEager.java b/src/main/java/io/reactivex/internal/operators/observable/ObservableConcatMapEager.java
+index cb15b10f..7028fdcf 100644
+--- a/src/main/java/io/reactivex/internal/operators/observable/ObservableConcatMapEager.java
++++ b/src/main/java/io/reactivex/internal/operators/observable/ObservableConcatMapEager.java
+@@ -162,10 +162,21 @@ public final class ObservableConcatMapEager<T, R> extends AbstractObservableWith
+ 
+         @Override
+         public void dispose() {
++            if (cancelled) {
++                return;
++            }
+             cancelled = true;
++            upstream.dispose();
++
++            drainAndDispose();
++        }
++
++        void drainAndDispose() {
+             if (getAndIncrement() == 0) {
+-                queue.clear();
+-                disposeAll();
++                do {
++                    queue.clear();
++                    disposeAll();
++                } while (decrementAndGet() != 0);
+             }
+         }
+ 
+diff --git a/src/main/java/io/reactivex/internal/operators/observable/ObservableRepeatUntil.java b/src/main/java/io/reactivex/internal/operators/observable/ObservableRepeatUntil.java
+index 485eb1f5..ff874035 100644
+--- a/src/main/java/io/reactivex/internal/operators/observable/ObservableRepeatUntil.java
++++ b/src/main/java/io/reactivex/internal/operators/observable/ObservableRepeatUntil.java
+@@ -91,6 +91,9 @@ public final class ObservableRepeatUntil<T> extends AbstractObservableWithUpstre
+             if (getAndIncrement() == 0) {
+                 int missed = 1;
+                 for (;;) {
++                    if (upstream.isDisposed()) {
++                        return;
++                    }
+                     source.subscribe(this);
+ 
+                     missed = addAndGet(-missed);
+diff --git a/src/main/java/io/reactivex/internal/operators/observable/ObservableTimeout.java b/src/main/java/io/reactivex/internal/operators/observable/ObservableTimeout.java
+index 2aeb9051..700469ef 100644
+--- a/src/main/java/io/reactivex/internal/operators/observable/ObservableTimeout.java
++++ b/src/main/java/io/reactivex/internal/operators/observable/ObservableTimeout.java
+@@ -296,7 +296,7 @@ public final class ObservableTimeout<T, U, V> extends AbstractObservableWithUpst
+         @Override
+         public void onTimeoutError(long idx, Throwable ex) {
+             if (index.compareAndSet(idx, Long.MAX_VALUE)) {
+-                DisposableHelper.dispose(this);
++                DisposableHelper.dispose(upstream);
+ 
+                 downstream.onError(ex);
+             } else {
+diff --git a/src/main/java/io/reactivex/internal/operators/observable/ObservableWithLatestFromMany.java b/src/main/java/io/reactivex/internal/operators/observable/ObservableWithLatestFromMany.java
+index 194d33c6..31b5690f 100644
+--- a/src/main/java/io/reactivex/internal/operators/observable/ObservableWithLatestFromMany.java
++++ b/src/main/java/io/reactivex/internal/operators/observable/ObservableWithLatestFromMany.java
+@@ -223,6 +223,7 @@ public final class ObservableWithLatestFromMany<T, R> extends AbstractObservable
+         void innerComplete(int index, boolean nonEmpty) {
+             if (!nonEmpty) {
+                 done = true;
++                DisposableHelper.dispose(upstream);
+                 cancelAllBut(index);
+                 HalfSerializer.onComplete(downstream, this, error);
+             }
+diff --git a/src/main/java/io/reactivex/internal/operators/parallel/ParallelDoOnNextTry.java b/src/main/java/io/reactivex/internal/operators/parallel/ParallelDoOnNextTry.java
+index 23fae57a..2b54b30f 100644
+--- a/src/main/java/io/reactivex/internal/operators/parallel/ParallelDoOnNextTry.java
++++ b/src/main/java/io/reactivex/internal/operators/parallel/ParallelDoOnNextTry.java
+@@ -112,7 +112,7 @@ public final class ParallelDoOnNextTry<T> extends ParallelFlowable<T> {
+ 
+         @Override
+         public void onNext(T t) {
+-            if (!tryOnNext(t)) {
++            if (!tryOnNext(t) && !done) {
+                 upstream.request(1);
+             }
+         }
+diff --git a/src/main/java/io/reactivex/processors/MulticastProcessor.java b/src/main/java/io/reactivex/processors/MulticastProcessor.java
+index 31724431..31b7a64f 100644
+--- a/src/main/java/io/reactivex/processors/MulticastProcessor.java
++++ b/src/main/java/io/reactivex/processors/MulticastProcessor.java
+@@ -569,6 +569,7 @@ public final class MulticastProcessor<T> extends FlowableProcessor<T> {
+                 }
+             }
+ 
++            consumed = c;
+             missed = wip.addAndGet(-missed);
+             if (missed == 0) {
+                 break;

@@ -1,0 +1,61 @@
+diff --git a/src/H5I.c b/src/H5I.c
+index 75678c7ca..e342f1682 100644
+--- a/src/H5I.c
++++ b/src/H5I.c
+@@ -663,7 +663,7 @@ H5I__search_cb(void *obj, hid_t id, void *_udata)
+ {
+     H5I_search_ud_t *udata = (H5I_search_ud_t *)_udata; /* User data for callback */
+     herr_t           cb_ret_val;                        /* User callback return value */
+-    int              ret_value = H5_ITER_ERROR;         /* Callback return value */
++    int              ret_value = H5_ITER_CONT;          /* Callback return value */
+ 
+     FUNC_ENTER_STATIC_NOERR
+ 
+diff --git a/src/H5Shyper.c b/src/H5Shyper.c
+index d9afff734..d7fdecf59 100644
+--- a/src/H5Shyper.c
++++ b/src/H5Shyper.c
+@@ -8666,7 +8666,7 @@ H5S__hyper_update_diminfo(H5S_t *space, H5S_seloper_t op, const H5S_hyper_dim_t
+                     space->select.sel_info.hslab->diminfo.low_bounds[curr_dim] = tmp_diminfo[curr_dim].start;
+                 tmp_high_bound = tmp_diminfo[curr_dim].start + (tmp_diminfo[curr_dim].block - 1) +
+                                  (tmp_diminfo[curr_dim].stride * (tmp_diminfo[curr_dim].count - 1));
+-                if (tmp_high_bound > space->select.sel_info.hslab->diminfo.low_bounds[curr_dim])
++                if (tmp_high_bound > space->select.sel_info.hslab->diminfo.high_bounds[curr_dim])
+                     space->select.sel_info.hslab->diminfo.high_bounds[curr_dim] = tmp_high_bound;
+             } /* end for */
+     }         /* end else */
+@@ -12083,7 +12083,7 @@ H5S_hyper_get_first_inc_block(const H5S_t *space, hsize_t clip_size, hbool_t *pa
+     if (diminfo->start >= clip_size) {
+         ret_value = 0;
+         if (partial)
+-            partial = FALSE;
++            *partial = FALSE;
+     } /* end if */
+     else {
+         /* Calculate index of first incomplete block */
+diff --git a/src/H5Spoint.c b/src/H5Spoint.c
+index 72077e2c3..18bd764b9 100644
+--- a/src/H5Spoint.c
++++ b/src/H5Spoint.c
+@@ -2163,7 +2163,7 @@ H5S__point_project_simple(const H5S_t *base_space, H5S_t *new_space, hsize_t *of
+             /* Copy over the point's coordinates */
+             HDmemset(new_node->pnt, 0, sizeof(hsize_t) * rank_diff);
+             H5MM_memcpy(&new_node->pnt[rank_diff], base_node->pnt,
+-                        (new_space->extent.rank * sizeof(hsize_t)));
++                        (base_space->extent.rank * sizeof(hsize_t)));
+ 
+             /* Keep the order the same when copying */
+             if (NULL == prev_node)
+diff --git a/src/H5Z.c b/src/H5Z.c
+index 097727287..9f81825a3 100644
+--- a/src/H5Z.c
++++ b/src/H5Z.c
+@@ -1082,7 +1082,7 @@ H5Z_modify(const H5O_pline_t *pline, H5Z_filter_t filter, unsigned flags, size_t
+             break;
+ 
+     /* Check if the filter was not already in the pipeline */
+-    if (idx > pline->nused)
++    if (idx >= pline->nused)
+         HGOTO_ERROR(H5E_PLINE, H5E_NOTFOUND, FAIL, "filter not in pipeline")
+ 
+     /* Change parameters for filter */

@@ -1,0 +1,39 @@
+{
+    "schema_version": 2,
+    "task": {
+        "name": "swe-sweep__click",
+        "type": "local",
+        "digest": "sha256:42a7eb18cc01a4fd8b8677eba3f3b8fcb1c9db8f00b833e79d0e2e5f3cda21e2",
+        "path": "/tmp/swe-sweep-task-f_wkc_5j/swe-sweep__click"
+    },
+    "install_only": false,
+    "timeout_multiplier": 1.0,
+    "verifier_timeout_multiplier": 0.4067796610169492,
+    "agent": {
+        "name": "swesweep.patch_agent:PatchAgent",
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {
+            "patch_path": "/home/danie/mini-swe-sweep/patches/claude__click.diff"
+        },
+        "mcp_servers": []
+    },
+    "bridge_inputs": {},
+    "skills": [],
+    "environment": {
+        "type": "docker",
+        "force_build": false,
+        "delete": true,
+        "stream": false,
+        "cpu_enforcement_policy": "auto",
+        "memory_enforcement_policy": "auto",
+        "extra_docker_compose": [],
+        "kwargs": {},
+        "extra_allowed_hosts": []
+    },
+    "verifier": {
+        "disable": false,
+        "environment_mode": "separate"
+    }
+}

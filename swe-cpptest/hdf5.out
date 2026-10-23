@@ -1,0 +1,23 @@
+Note: switching to '111c7ae9ac2efc29e8b399e6951253af9110b81a'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+hdf5: configure failed
+-- ... disable color and URL extended diagnostic messages
+-- ....All Warnings are enabled
+-- Could NOT find ZLIB (missing: ZLIB_DIR)
+-- Found ZLIB: /usr/lib/x86_64-linux-gnu/libz.so (found version "1.3")  
+-- Configuring incomplete, errors occurred!

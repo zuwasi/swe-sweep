@@ -1,0 +1,103 @@
+diff --git a/src/click/_compat.py b/src/click/_compat.py
+index b9e1f0d..95e4eeb 100644
+--- a/src/click/_compat.py
++++ b/src/click/_compat.py
+@@ -474,7 +474,13 @@ class _AtomicFile:
+         if self.closed:
+             return
+         self._f.close()
+-        os.replace(self._tmp_filename, self._real_filename)
++
++        if delete:
++            # Discard the partial write, leaving the original untouched.
++            os.unlink(self._tmp_filename)
++        else:
++            os.replace(self._tmp_filename, self._real_filename)
++
+         self.closed = True
+ 
+     def __getattr__(self, name: str) -> t.Any:
+diff --git a/src/click/core.py b/src/click/core.py
+index e2ccf59..9f5fbcd 100644
+--- a/src/click/core.py
++++ b/src/click/core.py
+@@ -2728,11 +2728,15 @@ class Option(Parameter):
+         finally:
+             ctx.resilient_parsing = resilient
+ 
+-        show_default_is_str = isinstance(self.show_default, str)
++        # The context's show_default setting overrides the option's.
++        show_default = (
++            self.show_default if ctx.show_default is None else ctx.show_default
++        )
++        show_default_is_str = isinstance(self.show_default, str) and bool(
++            show_default
++        )
+ 
+-        if show_default_is_str or (
+-            default_value is not None and (self.show_default or ctx.show_default)
+-        ):
++        if show_default_is_str or (default_value is not None and show_default):
+             if show_default_is_str:
+                 default_string = f"({self.show_default})"
+             elif isinstance(default_value, (list, tuple)):
+diff --git a/src/click/decorators.py b/src/click/decorators.py
+index 5940e69..a0702ab 100644
+--- a/src/click/decorators.py
++++ b/src/click/decorators.py
+@@ -219,8 +219,10 @@ def argument(*param_decls: str, **attrs: t.Any) -> t.Callable[[FC], FC]:
+     """
+ 
+     def decorator(f: FC) -> FC:
+-        ArgumentClass = attrs.pop("cls", Argument)
+-        _param_memo(f, ArgumentClass(param_decls, **attrs))
++        # Copy attrs, so pre-defined arguments can re-use the same cls=
++        argument_attrs = attrs.copy()
++        ArgumentClass = argument_attrs.pop("cls", Argument)
++        _param_memo(f, ArgumentClass(param_decls, **argument_attrs))
+         return f
+ 
+     return decorator
+diff --git a/src/click/shell_completion.py b/src/click/shell_completion.py
+index 706fb69..4385502 100644
+--- a/src/click/shell_completion.py
++++ b/src/click/shell_completion.py
+@@ -102,10 +102,10 @@ _SOURCE_BASH = """\
+         IFS=',' read type value <<< "$completion"
+ 
+         if [[ $type == 'dir' ]]; then
+-            COMREPLY=()
++            COMPREPLY=()
+             compopt -o dirnames
+         elif [[ $type == 'file' ]]; then
+-            COMREPLY=()
++            COMPREPLY=()
+             compopt -o default
+         elif [[ $type == 'plain' ]]; then
+             COMPREPLY+=($value)
+@@ -228,7 +228,9 @@ class ShellComplete:
+         """The name of the shell function defined by the completion
+         script.
+         """
+-        safe_name = re.sub(r"\W*", "", self.prog_name.replace("-", "_"), re.ASCII)
++        safe_name = re.sub(
++            r"\W*", "", self.prog_name.replace("-", "_"), flags=re.ASCII
++        )
+         return f"_{safe_name}_completion"
+ 
+     def source_vars(self) -> t.Dict[str, t.Any]:
+diff --git a/src/click/types.py b/src/click/types.py
+index 21f0e4f..b9eb357 100644
+--- a/src/click/types.py
++++ b/src/click/types.py
+@@ -838,7 +838,9 @@ class Path(ParamType):
+             if self.resolve_path:
+                 # realpath on Windows Python < 3.8 doesn't resolve symlinks
+                 if os.path.islink(rv):
+-                    rv = os.readlink(rv)
++                    # A relative link target is relative to the link's
++                    # directory, not the current directory.
++                    rv = os.path.join(os.path.dirname(rv), os.readlink(rv))
+ 
+                 rv = os.path.realpath(rv)
+ 

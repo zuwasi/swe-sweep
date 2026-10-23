@@ -1,0 +1,747 @@
+diff --git a/src/Compiler/AbstractIL/il.fs b/src/Compiler/AbstractIL/il.fs
+index ecfa06362..7215d506d 100644
+--- a/src/Compiler/AbstractIL/il.fs
++++ b/src/Compiler/AbstractIL/il.fs
+@@ -2062,7 +2062,8 @@ type ILMethodDef
+ 
+     member x.HasSecurity = x.Attributes &&& MethodAttributes.HasSecurity <> enum 0
+ 
+-    member x.IsManaged = x.ImplAttributes &&& MethodImplAttributes.Managed <> enum 0
++    member x.IsManaged =
++        x.ImplAttributes &&& MethodImplAttributes.ManagedMask = MethodImplAttributes.Managed
+ 
+     member x.IsForwardRef = x.ImplAttributes &&& MethodImplAttributes.ForwardRef <> enum 0
+ 
+@@ -4830,6 +4831,7 @@ let rec decodeCustomAttrElemType bytes sigptr x =
+         let elemTy, sigptr = decodeCustomAttrElemType bytes sigptr et
+         mkILArr1DTy elemTy, sigptr
+     | x when x = 0x50uy -> PrimaryAssemblyILGlobals.typ_Type, sigptr
++    | x when x = 0x51uy -> PrimaryAssemblyILGlobals.typ_Object, sigptr
+     | _ -> failwithf "decodeCustomAttrElemType ilg: unrecognized custom element type: %A" x
+ 
+ /// Given a custom attribute element, encode it to a binary representation according to the rules in Ecma 335 Partition II.
+diff --git a/src/Compiler/AbstractIL/ilprint.fs b/src/Compiler/AbstractIL/ilprint.fs
+index 9d278dbe3..85f914269 100644
+--- a/src/Compiler/AbstractIL/ilprint.fs
++++ b/src/Compiler/AbstractIL/ilprint.fs
+@@ -607,9 +607,11 @@ let goutput_ilmbody env os (il: ILMethodBody) =
+         output_string os ")\n"
+ 
+ let goutput_mbody is_entrypoint env os (md: ILMethodDef) =
+-    if md.ImplAttributes &&& MethodImplAttributes.Native <> enum 0 then
++    let codeType = md.ImplAttributes &&& MethodImplAttributes.CodeTypeMask
++
++    if codeType = MethodImplAttributes.Native then
+         output_string os "native "
+-    elif md.ImplAttributes &&& MethodImplAttributes.IL <> enum 0 then
++    elif codeType = MethodImplAttributes.IL then
+         output_string os "cil "
+     else
+         output_string os "runtime "
+diff --git a/src/Compiler/AbstractIL/ilread.fs b/src/Compiler/AbstractIL/ilread.fs
+index 7628df631..67a0da78f 100644
+--- a/src/Compiler/AbstractIL/ilread.fs
++++ b/src/Compiler/AbstractIL/ilread.fs
+@@ -2541,8 +2541,10 @@ and seekReadMethods (ctxt: ILMetadataReader) numTypars midx1 midx2 =
+ and sigptrGetTypeDefOrRefOrSpecIdx bytes sigptr =
+     let struct (n, sigptr) = sigptrGetZInt32 bytes sigptr
+ 
+-    if (n &&& 0x01) = 0x0 then (* Type Def *)
++    if (n &&& 0x03) = 0x0 then (* Type Def *)
+         TaggedIndex(tdor_TypeDef, (n >>>& 2)), sigptr
++    elif (n &&& 0x03) = 0x2 then (* Type Spec *)
++        TaggedIndex(tdor_TypeSpec, (n >>>& 2)), sigptr
+     else (* Type Ref *)
+         TaggedIndex(tdor_TypeRef, (n >>>& 2)), sigptr
+ 
+@@ -4866,7 +4868,7 @@ let openPEFileReader (fileName, pefile: BinaryFile, noFileOnDisk) =
+ 
+     let ilOnly = (cliFlags &&& 0x01) <> 0x00
+     let only32 = (cliFlags &&& 0x02) <> 0x00
+-    let is32bitpreferred = (cliFlags &&& 0x00020003) <> 0x00
++    let is32bitpreferred = (cliFlags &&& 0x00020000) <> 0x00
+     let _strongnameSigned = (cliFlags &&& 0x08) <> 0x00
+     let _trackdebugdata = (cliFlags &&& 0x010000) <> 0x00
+ 
+@@ -4875,8 +4877,8 @@ let openPEFileReader (fileName, pefile: BinaryFile, noFileOnDisk) =
+     let resourcesSize = seekReadInt32 pev (cliHeaderPhysLoc + 28)
+     let strongnameAddr = seekReadInt32 pev (cliHeaderPhysLoc + 32)
+     let _strongnameSize = seekReadInt32 pev (cliHeaderPhysLoc + 36)
+-    let vtableFixupsAddr = seekReadInt32 pev (cliHeaderPhysLoc + 40)
+-    let _vtableFixupsSize = seekReadInt32 pev (cliHeaderPhysLoc + 44)
++    let vtableFixupsAddr = seekReadInt32 pev (cliHeaderPhysLoc + 48)
++    let _vtableFixupsSize = seekReadInt32 pev (cliHeaderPhysLoc + 52)
+ 
+     if logging then
+         dprintn (fileName + ": metadataAddr = " + string metadataAddr)
+diff --git a/src/Compiler/AbstractIL/ilwrite.fs b/src/Compiler/AbstractIL/ilwrite.fs
+index c4c43f6a5..ff2e87ea6 100644
+--- a/src/Compiler/AbstractIL/ilwrite.fs
++++ b/src/Compiler/AbstractIL/ilwrite.fs
+@@ -1080,15 +1080,15 @@ and GetFieldInitFlags i =
+ // Type definitions
+ // --------------------------------------------------------------------
+ 
+-let GetMemberAccessFlags access =
++let GetNestedTypeAccessFlags access =
+     match access with
+-    | ILMemberAccess.Public -> 0x00000006
+-    | ILMemberAccess.Private -> 0x00000001
++    | ILMemberAccess.Public -> 0x00000002
++    | ILMemberAccess.Private -> 0x00000003
+     | ILMemberAccess.Family -> 0x00000004
+     | ILMemberAccess.CompilerControlled -> 0x00000000
+-    | ILMemberAccess.FamilyAndAssembly -> 0x00000002
+-    | ILMemberAccess.FamilyOrAssembly -> 0x00000005
+-    | ILMemberAccess.Assembly -> 0x00000003
++    | ILMemberAccess.FamilyAndAssembly -> 0x00000006
++    | ILMemberAccess.FamilyOrAssembly -> 0x00000007
++    | ILMemberAccess.Assembly -> 0x00000005
+ 
+ exception MethodDefNotFound
+ 
+@@ -2930,7 +2930,7 @@ let timestamp = absilWriteGetTimeStamp ()
+ // --------------------------------------------------------------------
+ 
+ let rec GenNestedExportedTypePass3 cenv cidx (ce: ILNestedExportedType) =
+-    let flags = GetMemberAccessFlags ce.Access
++    let flags = GetNestedTypeAccessFlags ce.Access
+     let nidx =
+       AddUnsharedRow cenv TableNames.ExportedType
+         (UnsharedRow
+@@ -3455,6 +3455,7 @@ let writeILMetadataAndCode (
+             codedBigness 2 TableNames.Assembly
+ 
+         let mrpBigness =
++            codedBigness 3 TableNames.TypeDef ||
+             codedBigness 3 TableNames.TypeRef ||
+             codedBigness 3 TableNames.ModuleRef ||
+             codedBigness 3 TableNames.Method ||
+diff --git a/src/Compiler/Driver/CompilerOptions.fs b/src/Compiler/Driver/CompilerOptions.fs
+index a43d686fb..9e1ce75c6 100644
+--- a/src/Compiler/Driver/CompilerOptions.fs
++++ b/src/Compiler/Driver/CompilerOptions.fs
+@@ -2120,6 +2120,13 @@ let abbreviatedFlagsBoth tcConfigB =
+             None,
+             Some(FSComp.SR.optsShortFormOf ("--reference"))
+         )
++        CompilerOption(
++            "t",
++            tagFile,
++            OptionString tcConfigB.AddCompilerToolsByPath,
++            None,
++            Some(FSComp.SR.optsShortFormOf ("--compilertool"))
++        )
+         CompilerOption(
+             "I",
+             tagDirList,
+diff --git a/src/Compiler/Facilities/prim-lexing.fs b/src/Compiler/Facilities/prim-lexing.fs
+index 6b927ef4a..661ca7e90 100644
+--- a/src/Compiler/Facilities/prim-lexing.fs
++++ b/src/Compiler/Facilities/prim-lexing.fs
+@@ -131,9 +131,9 @@ type StringText(str: string) =
+                 String.Empty
+             elif
+                 range.StartLine < 1
+-                || (range.StartLine - 1) > totalAmountOfLines
++                || (range.StartLine - 1) >= totalAmountOfLines
+                 || range.EndLine < 1
+-                || (range.EndLine - 1) > totalAmountOfLines
++                || (range.EndLine - 1) >= totalAmountOfLines
+             then
+                 invalidArg (nameof range) "The range is outside the file boundaries"
+             else
+diff --git a/src/Compiler/Service/FSharpParseFileResults.fs b/src/Compiler/Service/FSharpParseFileResults.fs
+index 883c62480..9496d13ed 100644
+--- a/src/Compiler/Service/FSharpParseFileResults.fs
++++ b/src/Compiler/Service/FSharpParseFileResults.fs
+@@ -386,7 +386,7 @@ type FSharpParseFileResults(diagnostics: FSharpDiagnostic[], input: ParsedInput,
+ 
+     member _.IsPositionWithinRecordDefinition pos =
+         let isWithin left right middle =
+-            Position.posGt right left && Position.posLt middle right
++            Position.posGt middle left && Position.posLt middle right
+ 
+         (pos, input)
+         ||> ParsedInput.exists (fun _path node ->
+diff --git a/src/Compiler/Service/ServiceAssemblyContent.fs b/src/Compiler/Service/ServiceAssemblyContent.fs
+index f1b3bf2ee..26b1607cf 100644
+--- a/src/Compiler/Service/ServiceAssemblyContent.fs
++++ b/src/Compiler/Service/ServiceAssemblyContent.fs
+@@ -301,7 +301,7 @@ module AssemblyContent =
+             let fileWriteTime = FileSystem.GetLastWriteTimeShim(fileName) 
+             withCache <| fun cache ->
+                 match contentType, cache.TryGet fileName with 
+-                | _, Some entry
++                | _, Some entry when entry.ContentType = Full && entry.FileWriteTime = fileWriteTime -> entry.Symbols
+                 | Public, Some entry when entry.FileWriteTime = fileWriteTime -> entry.Symbols
+                 | _ ->
+                     let symbols = getAssemblySignaturesContent contentType assemblies
+diff --git a/src/Compiler/Service/ServiceDeclarationLists.fs b/src/Compiler/Service/ServiceDeclarationLists.fs
+index 92729d789..31831686b 100644
+--- a/src/Compiler/Service/ServiceDeclarationLists.fs
++++ b/src/Compiler/Service/ServiceDeclarationLists.fs
+@@ -1200,7 +1200,7 @@ type DeclarationListInfo(declarations: DeclarationListItem[], isForType: bool, i
+                                     textInDeclList item, textInCode item, items
+                                 if not together.IsEmpty then
+                                   let item = together.Head
+-                                  textInDeclList item, textInCode item, items
++                                  textInDeclList item, textInCode item, together
+                             ]
+                  )
+             // RFC-1137: concat previous result
+diff --git a/src/Compiler/Service/ServiceLexing.fs b/src/Compiler/Service/ServiceLexing.fs
+index 14f5744a0..bb69d35bb 100644
+--- a/src/Compiler/Service/ServiceLexing.fs
++++ b/src/Compiler/Service/ServiceLexing.fs
+@@ -1487,7 +1487,7 @@ type FSharpToken =
+     member this.Kind =
+         match this.tok with
+         | ASR -> FSharpTokenKind.Asr
+-        | INFIX_STAR_STAR_OP "asr" -> FSharpTokenKind.Asr
++        | INFIX_STAR_STAR_OP "asr" -> FSharpTokenKind.InfixAsr
+         | INFIX_STAR_DIV_MOD_OP "land" -> FSharpTokenKind.InfixLand
+         | INFIX_STAR_DIV_MOD_OP "lor" -> FSharpTokenKind.InfixLor
+         | INFIX_STAR_STAR_OP "lsl" -> FSharpTokenKind.InfixLsl
+@@ -1567,7 +1567,7 @@ type FSharpToken =
+         | COLON_QMARK_GREATER -> FSharpTokenKind.ColonQuestionMarkGreater
+         | COLON_QMARK -> FSharpTokenKind.ColonQuestionMark
+         | COLON_EQUALS -> FSharpTokenKind.ColonEquals
+-        | SEMICOLON -> FSharpTokenKind.SemicolonSemicolon
++        | SEMICOLON -> FSharpTokenKind.Semicolon
+         | WHEN -> FSharpTokenKind.When
+         | WHILE -> FSharpTokenKind.While
+         | WHILE_BANG -> FSharpTokenKind.WhileBang
+@@ -1575,7 +1575,7 @@ type FSharpToken =
+         | HASH -> FSharpTokenKind.Hash
+         | AMP -> FSharpTokenKind.Ampersand
+         | AMP_AMP -> FSharpTokenKind.AmpersandAmpersand
+-        | QUOTE -> FSharpTokenKind.RightQuote
++        | QUOTE -> FSharpTokenKind.Quote
+         | LPAREN -> FSharpTokenKind.LeftParenthesis
+         | RPAREN -> FSharpTokenKind.RightParenthesis
+         | STAR -> FSharpTokenKind.Star
+@@ -1657,7 +1657,7 @@ type FSharpToken =
+         | UINT32 _ -> FSharpTokenKind.UInt32
+         | UINT16 _ -> FSharpTokenKind.UInt16
+         | UINT8 _ -> FSharpTokenKind.UInt8
+-        | INT64 _ -> FSharpTokenKind.UInt64
++        | INT64 _ -> FSharpTokenKind.Int64
+         | INT32 _ -> FSharpTokenKind.Int32
+         | INT32_DOT_DOT _ -> FSharpTokenKind.Int32DotDot
+         | INT16 _ -> FSharpTokenKind.Int16
+@@ -1818,6 +1818,7 @@ type FSharpToken =
+         match this.Kind with
+         | FSharpTokenKind.UInt8
+         | FSharpTokenKind.UInt16
++        | FSharpTokenKind.UInt32
+         | FSharpTokenKind.UInt64
+         | FSharpTokenKind.Int8
+         | FSharpTokenKind.Int16
+@@ -1825,6 +1826,9 @@ type FSharpToken =
+         | FSharpTokenKind.Int64
+         | FSharpTokenKind.Ieee32
+         | FSharpTokenKind.Ieee64
++        | FSharpTokenKind.Decimal
++        | FSharpTokenKind.NativeInt
++        | FSharpTokenKind.UNativeInt
+         | FSharpTokenKind.BigNumber -> true
+         | _ -> false
+ 
+diff --git a/src/Compiler/Service/ServiceNavigation.fs b/src/Compiler/Service/ServiceNavigation.fs
+index 03afe63b3..a67cea87e 100755
+--- a/src/Compiler/Service/ServiceNavigation.fs
++++ b/src/Compiler/Service/ServiceNavigation.fs
+@@ -439,7 +439,7 @@ module NavigationImpl =
+                     let nested =
+                         nested
+                         |> Array.ofList
+-                        |> Array.map (fun (decl, idx) -> decl.WithUniqueName(uniqueName d.LogicalName idx))
++                        |> Array.map (fun (decl, idx) -> decl.WithUniqueName(uniqueName decl.LogicalName idx))
+ 
+                     nested |> Array.sortInPlaceWith (fun a b -> compare a.LogicalName b.LogicalName)
+ 
+@@ -653,7 +653,7 @@ module NavigationImpl =
+                     let nested =
+                         nested
+                         |> Array.ofList
+-                        |> Array.map (fun (decl, idx) -> decl.WithUniqueName(uniqueName d.LogicalName idx))
++                        |> Array.map (fun (decl, idx) -> decl.WithUniqueName(uniqueName decl.LogicalName idx))
+ 
+                     nested |> Array.sortInPlaceWith (fun a b -> compare a.LogicalName b.LogicalName)
+ 
+diff --git a/src/Compiler/Service/ServiceParseTreeWalk.fs b/src/Compiler/Service/ServiceParseTreeWalk.fs
+index 621d89e4c..2342f216e 100644
+--- a/src/Compiler/Service/ServiceParseTreeWalk.fs
++++ b/src/Compiler/Service/ServiceParseTreeWalk.fs
+@@ -844,7 +844,7 @@ module SyntaxTraversal =
+                 | SynType.StaticConstantNamed(ty1, ty2, _)
+                 | SynType.Or(ty1, ty2, _, _) -> [ ty1; ty2 ] |> List.tryPick (traverseSynType path)
+                 | SynType.Tuple(path = segments) -> getTypeFromTuplePath segments |> List.tryPick (traverseSynType path)
+-                | SynType.StaticConstantExpr(expr, _) -> traverseSynExpr [] expr
++                | SynType.StaticConstantExpr(expr, _) -> traverseSynExpr path expr
+                 | SynType.Paren(innerType = t)
+                 | SynType.SignatureParameter(usedType = t) -> traverseSynType path t
+                 | SynType.Intersection(types = types) -> List.tryPick (traverseSynType path) types
+@@ -1061,9 +1061,9 @@ module SyntaxTraversal =
+                     |> List.append (attributeApplicationDives path attributes)
+                     |> pick decl
+                 | SynModuleSigDecl.Val(synValSig, range) -> [ dive synValSig range (traverseSynValSig path) ] |> pick decl
+-                | SynModuleSigDecl.Types(types = types; range = range) ->
++                | SynModuleSigDecl.Types(types = types) ->
+                     types
+-                    |> List.map (fun t -> dive t range (traverseSynTypeDefnSig path))
++                    |> List.map (fun t -> dive t t.Range (traverseSynTypeDefnSig path))
+                     |> pick decl
+                 | SynModuleSigDecl.Exception(_synExceptionDefn, _range) -> None
+                 | SynModuleSigDecl.Open(_target, _range) -> None
+diff --git a/src/Compiler/Service/ServiceParsedInputOps.fs b/src/Compiler/Service/ServiceParsedInputOps.fs
+index 9881ac7ef..04abce630 100644
+--- a/src/Compiler/Service/ServiceParsedInputOps.fs
++++ b/src/Compiler/Service/ServiceParsedInputOps.fs
+@@ -1251,7 +1251,7 @@ module ParsedInput =
+                 let g = m.Groups["attribute"]
+                 let col = pos.Column - g.Index
+ 
+-                if col >= 0 && col < g.Length then
++                if col >= 0 && col <= g.Length then
+                     let str = g.Value.Substring(0, col).TrimStart() // cut other rhs attributes
+                     let str = cutLeadingAttributes str
+ 
+diff --git a/src/Compiler/Symbols/SymbolHelpers.fs b/src/Compiler/Symbols/SymbolHelpers.fs
+index 8a9300ea8..fd80cc6c3 100644
+--- a/src/Compiler/Symbols/SymbolHelpers.fs
++++ b/src/Compiler/Symbols/SymbolHelpers.fs
+@@ -517,7 +517,7 @@ module internal SymbolHelpers =
+     let IsExplicitlySuppressed (g: TcGlobals) (item: Item) = 
+         // This may explore assemblies that are not in the reference set.
+         // In this case just assume the item is not suppressed.
+-        protectAssemblyExploration true (fun () -> 
++        protectAssemblyExploration false (fun () -> 
+             match item with 
+             | Item.Types(it, [ty]) -> 
+                 match tryTcrefOfAppTy g ty with
+diff --git a/src/Compiler/Symbols/Symbols.fs b/src/Compiler/Symbols/Symbols.fs
+index 33965a93f..e54f61c2d 100644
+--- a/src/Compiler/Symbols/Symbols.fs
++++ b/src/Compiler/Symbols/Symbols.fs
+@@ -1683,7 +1683,7 @@ type FSharpMemberOrFunctionOrValue(cenv, d:FSharpMemberOrValData, item) =
+                 let methods =
+                     if matchParameterNumber then
+                         methodInfos
+-                        |> List.filter (fun methodInfo -> methodInfo.NumArgs <> m.NumArgs )
++                        |> List.filter (fun methodInfo -> methodInfo.NumArgs = m.NumArgs)
+                     else methodInfos
+                 methods
+                 |> List.map (fun mi ->
+diff --git a/src/Compiler/SyntaxTree/PrettyNaming.fs b/src/Compiler/SyntaxTree/PrettyNaming.fs
+index 51f4c3b78..be269f374 100755
+--- a/src/Compiler/SyntaxTree/PrettyNaming.fs
++++ b/src/Compiler/SyntaxTree/PrettyNaming.fs
+@@ -165,7 +165,9 @@ let IsIdentifierPartCharacter c =
+         | UnicodeCategory.ConnectorPunctuation
+         // Combiners
+         | UnicodeCategory.NonSpacingMark
+-        | UnicodeCategory.SpacingCombiningMark -> true
++        | UnicodeCategory.SpacingCombiningMark
++        // Formatting
++        | UnicodeCategory.Format -> true
+         | _ -> false
+ 
+ /// Keywords paired with their descriptions. Used in completion and quick info.
+@@ -787,7 +789,7 @@ let (|Control|Equality|Relational|Indexer|FixedTypes|Other|) opName =
+     | "<<"
+     | "<|"
+     | "<||"
+-    | "<||"
++    | "<|||"
+     | "|>"
+     | "||>"
+     | "|||>"
+diff --git a/src/Compiler/SyntaxTree/SyntaxTree.fs b/src/Compiler/SyntaxTree/SyntaxTree.fs
+index 3670a2991..87cfa4555 100644
+--- a/src/Compiler/SyntaxTree/SyntaxTree.fs
++++ b/src/Compiler/SyntaxTree/SyntaxTree.fs
+@@ -75,6 +75,7 @@ type SynLongIdent =
+         match this with
+         | SynLongIdent([], _, _) -> failwith "rangeOfLidwd"
+         | SynLongIdent([ id ], _, _) -> id.idRange
++        | SynLongIdent(h :: t, [], _) -> unionRanges h.idRange (List.last t).idRange
+         | SynLongIdent(h :: t, dotRanges, _) ->
+             let nonExtraDots =
+                 if dotRanges.Length = t.Length then
+diff --git a/src/Compiler/TypedTree/TypedTreeOps.fs b/src/Compiler/TypedTree/TypedTreeOps.fs
+index 685f9a737..6b0d0602e 100644
+--- a/src/Compiler/TypedTree/TypedTreeOps.fs
++++ b/src/Compiler/TypedTree/TypedTreeOps.fs
+@@ -10525,7 +10525,7 @@ let (|EmptyRange|_|) (start, step, finish) =
+         start <= 0xffffffffUL
+         && step <= 0xffffffffUL
+         && finish <= 0xffffffffUL
+-        && finish <= start
++        && finish < start
+         ->
+         ValueSome EmptyRange
+ 
+diff --git a/src/Compiler/Utilities/FileSystem.fs b/src/Compiler/Utilities/FileSystem.fs
+index c2f4636ce..ba938e0c4 100644
+--- a/src/Compiler/Utilities/FileSystem.fs
++++ b/src/Compiler/Utilities/FileSystem.fs
+@@ -85,7 +85,11 @@ type ByteArrayMemory(bytes: byte[], offset, length) =
+ 
+     override _.Length = length
+ 
+-    override _.ReadAllBytes() = bytes
++    override _.ReadAllBytes() =
++        if offset = 0 && length = bytes.Length then
++            bytes
++        else
++            Array.sub bytes offset length
+ 
+     override _.ReadBytes(pos, count) =
+         checkCount count
+@@ -571,7 +575,7 @@ type DefaultFileSystem() as this =
+     default _.OpenFileForWriteShim(filePath: string, ?fileMode: FileMode, ?fileAccess: FileAccess, ?fileShare: FileShare) : Stream =
+         let fileMode = defaultArg fileMode FileMode.OpenOrCreate
+         let fileAccess = defaultArg fileAccess FileAccess.ReadWrite
+-        let fileShare = defaultArg fileShare FileShare.Delete ||| FileShare.ReadWrite
++        let fileShare = defaultArg fileShare (FileShare.Delete ||| FileShare.ReadWrite)
+ 
+         new FileStream(filePath, fileMode, fileAccess, fileShare) :> Stream
+ 
+@@ -715,7 +719,7 @@ type DefaultFileSystem() as this =
+         member _.OpenFileForWriteShim(filePath: string, ?fileMode: FileMode, ?fileAccess: FileAccess, ?fileShare: FileShare) : Stream =
+             let fileMode = defaultArg fileMode FileMode.OpenOrCreate
+             let fileAccess = defaultArg fileAccess FileAccess.ReadWrite
+-            let fileShare = defaultArg fileShare FileShare.Delete ||| FileShare.ReadWrite
++            let fileShare = defaultArg fileShare (FileShare.Delete ||| FileShare.ReadWrite)
+             this.OpenFileForWriteShim(filePath, fileMode, fileAccess, fileShare)
+ 
+         member _.GetFullPathShim(fileName: string) = this.GetFullPathShim fileName
+diff --git a/src/Compiler/Utilities/HashMultiMap.fs b/src/Compiler/Utilities/HashMultiMap.fs
+index b88af5d77..c8787ef22 100644
+--- a/src/Compiler/Utilities/HashMultiMap.fs
++++ b/src/Compiler/Utilities/HashMultiMap.fs
+@@ -169,10 +169,8 @@ type internal HashMultiMap<'Key, 'Value>(size: int, comparer: IEqualityComparer<
+ 
+         member s.Remove(x) =
+             match s.TryFind x.Key with
+-            | Some v ->
+-                if Unchecked.equals v x.Value then
+-                    s.Remove(x.Key)
+-
++            | Some v when Unchecked.equals v x.Value ->
++                s.Remove(x.Key)
+                 true
+             | _ -> false
+ 
+diff --git a/src/Compiler/Utilities/QueueList.fs b/src/Compiler/Utilities/QueueList.fs
+index 2c6852f8f..61f0e8c74 100644
+--- a/src/Compiler/Utilities/QueueList.fs
++++ b/src/Compiler/Utilities/QueueList.fs
+@@ -53,7 +53,7 @@ type internal QueueList<'T>(firstElementsIn: 'T list, lastElementsRevIn: 'T list
+         let newElements = Seq.toList ys
+         let newLength = List.length newElements
+         let lastElementsRevIn = List.rev newElements @ lastElementsRev
+-        QueueList(firstElements, lastElementsRevIn, numLastElementsIn + newLength)
++        QueueList(firstElements, lastElementsRevIn, numLastElements + newLength)
+ 
+     // This operation is O(n) anyway, so executing ToList() here is OK
+     interface IEnumerable<'T> with
+diff --git a/src/Compiler/Utilities/sformat.fs b/src/Compiler/Utilities/sformat.fs
+index 611c31235..dd83c5678 100644
+--- a/src/Compiler/Utilities/sformat.fs
++++ b/src/Compiler/Utilities/sformat.fs
+@@ -952,12 +952,15 @@ module Display =
+         let prefixMinLength = 12 // arbitrary. If print width is reduced, want to print a minimum of information on strings...
+         let prefixLength = max (width - 2 (*quotes*) - suffixLength) prefixMinLength
+ 
+-        "\""
+-        + (str.Substring(0, prefixLength))
+-        + "\""
+-        + "+["
+-        + (str.Length - prefixLength).ToString()
+-        + " chars]"
++        if prefixLength >= str.Length then
++            formatString str
++        else
++            "\""
++            + (str.Substring(0, prefixLength))
++            + "\""
++            + "+["
++            + (str.Length - prefixLength).ToString()
++            + " chars]"
+ #endif
+ 
+     type Precedence =
+diff --git a/src/FSharp.Build/Fsc.fs b/src/FSharp.Build/Fsc.fs
+index 9de88c9db..56c11a138 100644
+--- a/src/FSharp.Build/Fsc.fs
++++ b/src/FSharp.Build/Fsc.fs
+@@ -169,6 +169,8 @@ type public Fsc() as this =
+         // CompressMetadata
+         if compressMetadata then
+             builder.AppendSwitch("--compressmetadata")
++        else
++            builder.AppendSwitch("--compressmetadata-")
+ 
+         // DefineConstants
+         for item in defineConstants do
+diff --git a/src/FSharp.Build/Microsoft.FSharp.NetSdk.props b/src/FSharp.Build/Microsoft.FSharp.NetSdk.props
+index 792df8e23..c95963677 100644
+--- a/src/FSharp.Build/Microsoft.FSharp.NetSdk.props
++++ b/src/FSharp.Build/Microsoft.FSharp.NetSdk.props
+@@ -76,7 +76,7 @@ WARNING:  DO NOT MODIFY this file unless you are knowledgeable about MSBuild and
+ 
+     <FsiToolPath Condition="'$(FsiToolPath)' == ''">$([System.IO.Path]::GetDirectoryName($(DOTNET_HOST_PATH)))</FsiToolPath>
+     <FsiToolExe Condition="'$(FsiToolExe)' == ''">$([System.IO.Path]::GetFileName($(DOTNET_HOST_PATH)))</FsiToolExe>
+-    <DotnetFsiCompilerPath Condition="'$(DotnetFscCompilerPath)' == ''">"$(MSBuildThisFileDirectory)fsi.dll"</DotnetFsiCompilerPath>
++    <DotnetFsiCompilerPath Condition="'$(DotnetFsiCompilerPath)' == ''">"$(MSBuildThisFileDirectory)fsi.dll"</DotnetFsiCompilerPath>
+   </PropertyGroup>
+ 
+   <PropertyGroup Condition=" '$(ManagePackageVersionsCentrally)' == 'true' ">
+diff --git a/src/FSharp.Build/WriteCodeFragment.fs b/src/FSharp.Build/WriteCodeFragment.fs
+index 7df19fad3..9f2fcdd7c 100644
+--- a/src/FSharp.Build/WriteCodeFragment.fs
++++ b/src/FSharp.Build/WriteCodeFragment.fs
+@@ -31,7 +31,7 @@ type WriteCodeFragment() as this =
+                     match c with
+                     | '\n'
+                     | '\u2028'
+-                    | '\u2028' -> sb.Append("\\n")
++                    | '\u2029' -> sb.Append("\\n")
+                     | '\r' -> sb.Append("\\r")
+                     | '\t' -> sb.Append("\\t")
+                     | '\'' -> sb.Append("\\'")
+@@ -159,7 +159,7 @@ type WriteCodeFragment() as this =
+                             TaskItem(Path.Combine(outputDirectory.ItemSpec, fileName)) :> ITaskItem
+ 
+                 let codeText = code.ToString()
+-                File.WriteAllText(fileName, codeText)
++                File.WriteAllText(outputFileItem.ItemSpec, codeText)
+                 _outputFile <- outputFileItem
+                 not this.Log.HasLoggedErrors
+         with TaskFailed ->
+diff --git a/src/FSharp.Core/Query.fs b/src/FSharp.Core/Query.fs
+index f64e6c1c0..fc5959199 100644
+--- a/src/FSharp.Core/Query.fs
++++ b/src/FSharp.Core/Query.fs
+@@ -180,7 +180,7 @@ type QueryBuilder() =
+             let v = projection e.Current
+             if v.HasValue then
+                 acc <- plus acc v.Value
+-            count <- count + 1
++                count <- count + 1
+         if count = 0 then Nullable() else Nullable(LanguagePrimitives.DivideByInt< (^Value) > acc count)
+ 
+     member inline _.AverageBy< 'T, 'Q, ^Value
+@@ -651,7 +651,7 @@ module Query =
+ 
+                     // The F# implementation needs an FSharpFunc as a parameter.
+                     let selectorE = Expr.Lambda (v, res) |> LeafExpressionConverter.EvaluateQuotation
+-                    CE (qb, [srcItemTy; qTy; resTy], [srcE; selectorE])
++                    CE (qb, [srcItemTy; qTy; resTyNoNullable], [srcE; selectorE])
+         Make, Call
+ 
+     let MakeAverageBy, CallAverageBy =
+diff --git a/src/FSharp.Core/prim-types.fs b/src/FSharp.Core/prim-types.fs
+index b5bcc6c28..4d0464fef 100644
+--- a/src/FSharp.Core/prim-types.fs
++++ b/src/FSharp.Core/prim-types.fs
+@@ -2849,7 +2849,7 @@ namespace Microsoft.FSharp.Core
+             elif type3eq<'T1, 'T2, 'U, uint16> then convPrim<_,'U> (# "conv.u2" (# "sub" (convPrim<_,uint16> x) (convPrim<_,uint16> y) : uint32 #) : uint16 #)
+             elif type3eq<'T1, 'T2, 'U, sbyte> then convPrim<_,'U> (# "conv.i1" (# "sub" (convPrim<_,sbyte> x) (convPrim<_,sbyte> y) : int32 #) : sbyte #)
+             elif type3eq<'T1, 'T2, 'U, byte> then convPrim<_,'U> (# "conv.u1" (# "sub" (convPrim<_,byte> x) (convPrim<_,byte> y) : uint32 #) : byte #)
+-            elif type3eq<'T1, 'T2, 'U, char> then convPrim<_,'U> (# "conv.u1" (# "sub" (convPrim<_,char> x) (convPrim<_,char> y) : uint32 #) : char #)
++            elif type3eq<'T1, 'T2, 'U, char> then convPrim<_,'U> (# "conv.u2" (# "sub" (convPrim<_,char> x) (convPrim<_,char> y) : uint32 #) : char #)
+             elif type3eq<'T1, 'T2, 'U, decimal> then convPrim<_,'U> (Decimal.op_Subtraction(convPrim<_,decimal> x, convPrim<_,decimal> y))
+             else BinaryOpDynamicImplTable<OpSubtractionInfo, 'T1, 'T2, 'U>.Invoke "op_Subtraction" x y
+ 
+@@ -3492,7 +3492,7 @@ namespace Microsoft.FSharp.Core
+                 elif typeeq<'T, float> then convPrim<_,'U> (# "conv.ovf.u" (convPrim<_,float> value) : unativeint #) 
+                 elif typeeq<'T, float32> then convPrim<_,'U> (# "conv.ovf.u" (convPrim<_,float32> value) : unativeint #) 
+                 elif typeeq<'T, char> then convPrim<_,'U> (# "conv.ovf.u.un" (convPrim<_,char> value) : unativeint #)
+-                elif typeeq<'T, decimal> then convPrim<_,'U> (# "conv.ovf.u" (Decimal.op_Explicit (convPrim<_,decimal> value) : uint64) : unativeint #)
++                elif typeeq<'T, decimal> then convPrim<_,'U> (# "conv.ovf.u.un" (Decimal.op_Explicit (convPrim<_,decimal> value) : uint64) : unativeint #)
+                 elif typeeq<'T, string> then convPrim<_,'U> (ParseUIntPtr (convPrim<_,string> value)) 
+                 else UnaryOpDynamicImplTable<OpExplicitInfo, 'T, 'U>.Invoke "op_Explicit" value
+             elif typeeq<'U, nativeint> then 
+@@ -3602,8 +3602,8 @@ namespace Microsoft.FSharp.Core
+             elif type2eq<'T1, 'T2, uint64> && typeeq<'U, bool> then convPrim<_,'U> (not (# "cgt.un" (convPrim<_,uint64> x) (convPrim<_,uint64> y) : bool #)) 
+             elif type2eq<'T1, 'T2, nativeint> && typeeq<'U, bool> then convPrim<_,'U> (not (# "cgt" (convPrim<_,nativeint> x) (convPrim<_,nativeint> y) : bool #)) 
+             elif type2eq<'T1, 'T2, unativeint> && typeeq<'U, bool> then convPrim<_,'U> (not (# "cgt.un" (convPrim<_,unativeint> x) (convPrim<_,unativeint> y) : bool #)) 
+-            elif type2eq<'T1, 'T2, float> && typeeq<'U, bool> then convPrim<_,'U> (not (# "cgt" (convPrim<_,float> x) (convPrim<_,float> y) : bool #)) 
+-            elif type2eq<'T1, 'T2, float32> && typeeq<'U, bool> then convPrim<_,'U> (not (# "cgt" (convPrim<_,float32> x) (convPrim<_,float32> y) : bool #)) 
++            elif type2eq<'T1, 'T2, float> && typeeq<'U, bool> then convPrim<_,'U> (not (# "cgt.un" (convPrim<_,float> x) (convPrim<_,float> y) : bool #)) 
++            elif type2eq<'T1, 'T2, float32> && typeeq<'U, bool> then convPrim<_,'U> (not (# "cgt.un" (convPrim<_,float32> x) (convPrim<_,float32> y) : bool #)) 
+             elif type2eq<'T1, 'T2, char> && typeeq<'U, bool> then convPrim<_,'U> (not (# "cgt.un" (convPrim<_,char> x) (convPrim<_,char> y) : bool #)) 
+             elif type2eq<'T1, 'T2, decimal> && typeeq<'U, bool> then convPrim<_,'U> (Decimal.op_LessThanOrEqual (convPrim<_,decimal> x, convPrim<_,decimal> y))
+             elif type2eq<'T1, 'T2, string> && typeeq<'U, bool> then convPrim<_,'U> (not (# "cgt" (String.CompareOrdinal (convPrim<_,string> x, convPrim<_,string> y)) 0 : bool #))
+@@ -3622,8 +3622,8 @@ namespace Microsoft.FSharp.Core
+             elif type2eq<'T1, 'T2, uint64> && typeeq<'U, bool> then convPrim<_,'U> (not (# "clt.un" (convPrim<_,uint64> x) (convPrim<_,uint64> y) : bool #)) 
+             elif type2eq<'T1, 'T2, nativeint> && typeeq<'U, bool> then convPrim<_,'U> (not (# "clt" (convPrim<_,nativeint> x) (convPrim<_,nativeint> y) : bool #)) 
+             elif type2eq<'T1, 'T2, unativeint> && typeeq<'U, bool> then convPrim<_,'U> (not (# "clt.un" (convPrim<_,unativeint> x) (convPrim<_,unativeint> y) : bool #)) 
+-            elif type2eq<'T1, 'T2, float> && typeeq<'U, bool> then convPrim<_,'U> (not (# "clt" (convPrim<_,float> x) (convPrim<_,float> y) : bool #)) 
+-            elif type2eq<'T1, 'T2, float32> && typeeq<'U, bool> then convPrim<_,'U> (not (# "clt" (convPrim<_,float32> x) (convPrim<_,float32> y) : bool #)) 
++            elif type2eq<'T1, 'T2, float> && typeeq<'U, bool> then convPrim<_,'U> (not (# "clt.un" (convPrim<_,float> x) (convPrim<_,float> y) : bool #)) 
++            elif type2eq<'T1, 'T2, float32> && typeeq<'U, bool> then convPrim<_,'U> (not (# "clt.un" (convPrim<_,float32> x) (convPrim<_,float32> y) : bool #)) 
+             elif type2eq<'T1, 'T2, char> && typeeq<'U, bool> then convPrim<_,'U> (not (# "clt.un" (convPrim<_,char> x) (convPrim<_,char> y) : bool #)) 
+             elif type2eq<'T1, 'T2, decimal> && typeeq<'U, bool> then convPrim<_,'U> (Decimal.op_GreaterThanOrEqual (convPrim<_,decimal> x, convPrim<_,decimal> y))
+             elif type2eq<'T1, 'T2, string> && typeeq<'U, bool> then convPrim<_,'U> (not (# "clt" (String.CompareOrdinal (convPrim<_,string> x, convPrim<_,string> y)) 0 : bool #))
+@@ -6270,8 +6270,8 @@ namespace Microsoft.FSharp.Core
+                 let len = (finish - start + 1)
+                 let setArrayElem = 
+                     match nonFixedDim with
+-                    | 1 -> (fun j -> SetArray2D target index (bound + start + j) (GetArray source j)) 
+-                    | 0 -> (fun i -> SetArray2D target (bound + start + i) index (GetArray source i))
++                    | 1 -> (fun j -> SetArray2D target index (start + j) (GetArray source j)) 
++                    | 0 -> (fun i -> SetArray2D target (start + i) index (GetArray source i))
+                     | _ -> raise (IndexOutOfRangeException())
+                 for j = 0 to len - 1 do
+                     setArrayElem j
+@@ -6336,7 +6336,7 @@ namespace Microsoft.FSharp.Core
+                 let dst = zeroCreate (if len < 0 then 0 else len)
+                 let getArrayElem = 
+                     match nonFixedDim with
+-                    | 2 -> (fun i -> GetArray3D source index1 index2 i)
++                    | 2 -> (fun i -> GetArray3D source index1 index2 (start + i))
+                     | 1 -> (fun i -> GetArray3D source index1 (start + i) index2)
+                     | 0 -> (fun i -> GetArray3D source (start+i) index1 index2)
+                     | _ -> raise (IndexOutOfRangeException())
+@@ -6374,9 +6374,9 @@ namespace Microsoft.FSharp.Core
+                 let len2 = (finish2 - start2 + 1)
+                 let setArrayElem = 
+                     match nonFixedDim1, nonFixedDim2 with
+-                    | 1, 2 -> (fun i j -> SetArray3D target index (bound1 + start1 + i) (bound2 + start2 + j) (GetArray2D source i j)) 
+-                    | 0, 2 -> (fun i j -> SetArray3D target (bound1 + start1 + i) index (bound2+ start2 + j) (GetArray2D source i j))
+-                    | 0, 1 -> (fun i j -> SetArray3D target (bound1 + start1 + i) (bound2+ start2 + j) index (GetArray2D source i j))
++                    | 1, 2 -> (fun i j -> SetArray3D target index (start1 + i) (start2 + j) (GetArray2D source i j)) 
++                    | 0, 2 -> (fun i j -> SetArray3D target (start1 + i) index (start2 + j) (GetArray2D source i j))
++                    | 0, 1 -> (fun i j -> SetArray3D target (start1 + i) (start2 + j) index (GetArray2D source i j))
+                     | _ -> raise (IndexOutOfRangeException())
+ 
+                 for i = 0 to len1 - 1 do
+@@ -6398,9 +6398,9 @@ namespace Microsoft.FSharp.Core
+                 let len = (finish - start + 1)
+                 let setArrayElem = 
+                     match nonFixedDim with
+-                    | 2 -> (fun k -> SetArray3D target index1 index2 (bound + start + k) (GetArray source k)) 
+-                    | 1 -> (fun j -> SetArray3D target index1 (bound + start + j) index2 (GetArray source j)) 
+-                    | 0 -> (fun i -> SetArray3D target (bound + start + i) index1 index2 (GetArray source i))
++                    | 2 -> (fun k -> SetArray3D target index1 index2 (start + k) (GetArray source k)) 
++                    | 1 -> (fun j -> SetArray3D target index1 (start + j) index2 (GetArray source j)) 
++                    | 0 -> (fun i -> SetArray3D target (start + i) index1 index2 (GetArray source i))
+                     | _ -> raise (IndexOutOfRangeException())
+                 for j = 0 to len - 1 do 
+                     setArrayElem j
+@@ -6443,10 +6443,10 @@ namespace Microsoft.FSharp.Core
+                 let dst = Array3DZeroCreate (max len1 0) (max len2 0) (max len3 0)
+                 let getArrayElem = 
+                     match nonFixedDim1, nonFixedDim2, nonFixedDim3 with
+-                    | 1, 2, 3 -> (fun i j k-> GetArray4D source index i j k)
+-                    | 0, 2, 3 -> (fun i j k -> GetArray4D source i index j k)
+-                    | 0, 1, 3 -> (fun i j k -> GetArray4D source i j index k)
+-                    | 0, 1, 2 -> (fun i j k -> GetArray4D source i j k index)
++                    | 1, 2, 3 -> (fun i j k -> GetArray4D source index (start1 + i) (start2 + j) (start3 + k))
++                    | 0, 2, 3 -> (fun i j k -> GetArray4D source (start1 + i) index (start2 + j) (start3 + k))
++                    | 0, 1, 3 -> (fun i j k -> GetArray4D source (start1 + i) (start2 + j) index (start3 + k))
++                    | 0, 1, 2 -> (fun i j k -> GetArray4D source (start1 + i) (start2 + j) (start3 + k) index)
+                     | _ -> raise (IndexOutOfRangeException())
+                 for i = 0 to len1 - 1 do
+                     for j = 0 to len2 - 1 do
+@@ -6478,12 +6478,12 @@ namespace Microsoft.FSharp.Core
+                 let dst = Array2DZeroCreate (max len1 0) (max len2 0)
+                 let getArrayElem = 
+                     match nonFixedDim1, nonFixedDim2 with
+-                    | 2, 3 -> (fun i j -> GetArray4D source index1 index2 i j)
+-                    | 1, 3 -> (fun i j -> GetArray4D source index1 i index2 j)
+-                    | 1, 2 -> (fun i j -> GetArray4D source index1 i j index2)
+-                    | 0, 3 -> (fun i j -> GetArray4D source i index1 index2 j)
+-                    | 0, 2 -> (fun i j -> GetArray4D source i index1 j index2)
+-                    | 0, 1 -> (fun i j -> GetArray4D source i j index1 index2)
++                    | 2, 3 -> (fun i j -> GetArray4D source index1 index2 (start1 + i) (start2 + j))
++                    | 1, 3 -> (fun i j -> GetArray4D source index1 (start1 + i) index2 (start2 + j))
++                    | 1, 2 -> (fun i j -> GetArray4D source index1 (start1 + i) (start2 + j) index2)
++                    | 0, 3 -> (fun i j -> GetArray4D source (start1 + i) index1 index2 (start2 + j))
++                    | 0, 2 -> (fun i j -> GetArray4D source (start1 + i) index1 (start2 + j) index2)
++                    | 0, 1 -> (fun i j -> GetArray4D source (start1 + i) (start2 + j) index1 index2)
+                     | _ -> raise (IndexOutOfRangeException())
+                 for i = 0 to len1 - 1 do
+                     for j = 0 to len2 - 1 do
+@@ -6516,10 +6516,10 @@ namespace Microsoft.FSharp.Core
+                 let dst = zeroCreate (max len1 0)
+                 let getArrayElem = 
+                     match nonFixedDim1 with
+-                    | 0 -> (fun i -> GetArray4D source i index1 index2 index3)
+-                    | 1 -> (fun i -> GetArray4D source index1 i index2 index3)
+-                    | 2 -> (fun i -> GetArray4D source index1 index2 i index3)
+-                    | 3 -> (fun i -> GetArray4D source index1 index2 index3 i)
++                    | 0 -> (fun i -> GetArray4D source (start1 + i) index1 index2 index3)
++                    | 1 -> (fun i -> GetArray4D source index1 (start1 + i) index2 index3)
++                    | 2 -> (fun i -> GetArray4D source index1 index2 (start1 + i) index3)
++                    | 3 -> (fun i -> GetArray4D source index1 index2 index3 (start1 + i))
+                     | _ -> raise (IndexOutOfRangeException())
+                 for i = 0 to len1 - 1 do
+                     SetArray dst i (getArrayElem i) 
+@@ -6566,10 +6566,10 @@ namespace Microsoft.FSharp.Core
+ 
+                 let setArrayElem = 
+                     match nonFixedDim1, nonFixedDim2, nonFixedDim3 with
+-                    | 1, 2, 3 -> (fun i j k -> SetArray4D target index (bound1 + start1 + i) (bound2 + start2 + j) (bound3 + start3 + k) (GetArray3D source i j k))
+-                    | 0, 2, 3 -> (fun i j k -> SetArray4D target (bound1 + start1 + i) index (bound2 + start2 + j) (bound3 + start3 + k) (GetArray3D source i j k))
+-                    | 0, 1, 3 -> (fun i j k -> SetArray4D target (bound1 + start1 + i) (bound2 + start2 + j) index (bound3 + start3 + k) (GetArray3D source i j k))
+-                    | 0, 1, 2 -> (fun i j k -> SetArray4D target (bound1 + start1 + i) (bound2 + start2 + j) (bound3 + start3 + k) index (GetArray3D source i j k))
++                    | 1, 2, 3 -> (fun i j k -> SetArray4D target index (start1 + i) (start2 + j) (start3 + k) (GetArray3D source i j k))
++                    | 0, 2, 3 -> (fun i j k -> SetArray4D target (start1 + i) index (start2 + j) (start3 + k) (GetArray3D source i j k))
++                    | 0, 1, 3 -> (fun i j k -> SetArray4D target (start1 + i) (start2 + j) index (start3 + k) (GetArray3D source i j k))
++                    | 0, 1, 2 -> (fun i j k -> SetArray4D target (start1 + i) (start2 + j) (start3 + k) index (GetArray3D source i j k))
+                     | _ -> raise (IndexOutOfRangeException())
+ 
+                 for i = 0 to len1 - 1 do
+@@ -6599,12 +6599,12 @@ namespace Microsoft.FSharp.Core
+ 
+                 let setArrayElem = 
+                     match nonFixedDim1, nonFixedDim2 with
+-                    | 2, 3 -> (fun i j -> SetArray4D target index1 index2 (bound1 + start1 + i) (bound2 + start2 + j) (GetArray2D source i j))
+-                    | 1, 3 -> (fun i j -> SetArray4D target index1 (bound1 + start1 + i) index2 (bound2 + start2 + j) (GetArray2D source i j))
+-                    | 1, 2 -> (fun i j -> SetArray4D target index1 (bound1 + start1 + i) (bound2 + start2 + j) index2 (GetArray2D source i j))
+-                    | 0, 3 -> (fun i j -> SetArray4D target (bound1 + start1 + i) index1 index2 (bound2 + start2 + j) (GetArray2D source i j))
+-                    | 0, 2 -> (fun i j -> SetArray4D target (bound1 + start1 + i) index1 (bound2 + start2 + j) index2 (GetArray2D source i j))
+-                    | 0, 1 -> (fun i j -> SetArray4D target (bound1 + start1 + i) (bound2 + start2 + j) index1 index2 (GetArray2D source i j))
++                    | 2, 3 -> (fun i j -> SetArray4D target index1 index2 (start1 + i) (start2 + j) (GetArray2D source i j))
++                    | 1, 3 -> (fun i j -> SetArray4D target index1 (start1 + i) index2 (start2 + j) (GetArray2D source i j))
++                    | 1, 2 -> (fun i j -> SetArray4D target index1 (start1 + i) (start2 + j) index2 (GetArray2D source i j))
++                    | 0, 3 -> (fun i j -> SetArray4D target (start1 + i) index1 index2 (start2 + j) (GetArray2D source i j))
++                    | 0, 2 -> (fun i j -> SetArray4D target (start1 + i) index1 (start2 + j) index2 (GetArray2D source i j))
++                    | 0, 1 -> (fun i j -> SetArray4D target (start1 + i) (start2 + j) index1 index2 (GetArray2D source i j))
+                     | _ -> raise (IndexOutOfRangeException())
+ 
+                 for i = 0 to len1 - 1 do
+@@ -6635,10 +6635,10 @@ namespace Microsoft.FSharp.Core
+                 let len1 = (finish1 - start1 + 1)
+                 let setArrayElem = 
+                     match nonFixedDim1 with
+-                    | 0 -> (fun i -> SetArray4D target (bound1 + start1 + i) index1 index2 index3 (GetArray source i))
+-                    | 1 -> (fun i -> SetArray4D target index1 (bound1 + start1 + i) index2 index3 (GetArray source i))
+-                    | 2 -> (fun i -> SetArray4D target index1 index2 (bound1 + start1 + i) index3 (GetArray source i))
+-                    | 3 -> (fun i -> SetArray4D target index1 index2 index3 (bound1 + start1 + i) (GetArray source i))
++                    | 0 -> (fun i -> SetArray4D target (start1 + i) index1 index2 index3 (GetArray source i))
++                    | 1 -> (fun i -> SetArray4D target index1 (start1 + i) index2 index3 (GetArray source i))
++                    | 2 -> (fun i -> SetArray4D target index1 index2 (start1 + i) index3 (GetArray source i))
++                    | 3 -> (fun i -> SetArray4D target index1 index2 index3 (start1 + i) (GetArray source i))
+                     | _ -> raise (IndexOutOfRangeException())
+                 for i = 0 to len1 - 1 do
+                     setArrayElem i
+diff --git a/src/FSharp.Core/quotations.fs b/src/FSharp.Core/quotations.fs
+index 2f90f7a48..7cb33915f 100644
+--- a/src/FSharp.Core/quotations.fs
++++ b/src/FSharp.Core/quotations.fs
+@@ -2043,7 +2043,7 @@ module Patterns =
+                     | [| minfoW |] -> Unique(StaticMethodCallWOp(minfo, minfoW, nWitnesses))
+                     | _ ->
+                         Ambiguous(fun argTypes tyargs ->
+-                            let minfoW = bindModuleFunctionWithCallSiteArgs (ty, nm, argTypes, tyargs)
++                            let minfoW = bindModuleFunctionWithCallSiteArgs (ty, nmW, argTypes, tyargs)
+                             StaticMethodCallWOp(minfo, minfoW, nWitnesses))
+             | _ ->
+                 Ambiguous(fun argTypes tyargs ->

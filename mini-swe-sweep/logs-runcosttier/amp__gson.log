@@ -1,0 +1,26 @@
+I fixed 7 bugs in the `gson` module's main code, listed below. The final full test run gives the same result as before I started: 1,014 tests, and the same 17 fail. All 17 fail because of the Java 21 environment, not the code. Some date tests expect an older date format, and some reflection tests are blocked by Java's module access rules. No test that passed before now fails.
+
+**Fixes:**
+1. **Crash on self-referencing generic types.** Getting an adapter for classes like `class Foo<X> { Foo<? super X> f; }` crashed with `StackOverflowError`. In [`$Gson$Types`](file:///home/danie/mini-swe-sweep/repos/gson/gson/src/main/java/com/google/gson/internal/$Gson$Types.java), nested wildcards like `? extends ? super T` are now collapsed into one, and type-variable resolution remembers variables it has already seen.
+2. **`skipValue()` looped forever.** Calling [`JsonReader.skipValue()`](file:///home/danie/mini-swe-sweep/repos/gson/gson/src/main/java/com/google/gson/stream/JsonReader.java) when the next token was `]` or `}` never returned. It now consumes that token and returns.
+3. **`-0` lost its sign.** It was stored as the integer `0`, so `nextString()` returned `"0"` (the docs promise the number's string form) and `nextDouble()` returned `0.0`. It now returns `"-0"` and `-0.0`.
+4. **`nextLong()` gave wrong values above 2^53.** The docs say it throws if the value can't be represented exactly as a long. It returned `Long.MAX_VALUE` for `9223372036854775808`, and the wrong value for `9223372036854775806.000`. Large values are now checked exactly. Tiny values like `1e-2000` still round to 0, because an existing test requires that.
+5. **`hasNext()` returned true at end of document.** Fixed in both `JsonReader` and `JsonTreeReader`. The docs say it reports whether there is another element.
+6. **Wrong exception for trailing data.** When the input has data left over after the value, `Gson.fromJson(Reader, …)` threw `JsonIOException`. It now throws `JsonSyntaxException`, which is what the docs say for invalid JSON.
+7. **Missing comma in `Gson.toString()`.** It printed `…falsefactories:…`.
+
+**Bugs I looked at and left alone:**
+- **`BigInteger` equality.** `JsonPrimitive` treats 2^64+5 as equal to 5. An existing test asserts this on purpose, so changing it would break that test.
+- **`JsonArray.set(i, null)`.** It stores a raw `null` instead of `JsonNull`. An existing test asserts `null`.
+- **Self-reference test in `extras`.** `GraphAdapterBuilderTest.testSerializationDirectSelfReference` fails on the original code too. It conflicts with gson's own test, which expects self-references to be skipped.
+
+**Another agent is editing this worktree at the same time.** It changed and staged `GsonBuilder` (date-style handling), `JsonWriter.value(double)` (now allows NaN/Infinity in lenient mode), and `JsonTreeReader.skipValue`. It also staged my `$Gson$Types` change. My other edits are unstaged. I didn't change any of its work, but two problems in its `skipValue` edit need a decision:
+- When the next token is a name, it now skips the name and its value. `JsonReader` skips only the name, so the two readers now behave differently.
+- Calling `skipValue()` on a top-level value still crashes with `ArrayIndexOutOfBoundsException`, as it did before its edit.
+
+Nothing is committed. My scratch files are deleted; the other agent's files in `.amp/in/` are still there.
+vadoc example exactly.
+- 300k-input parser fuzz: no exceptions outside `IOException`/`IllegalStateException`/`IllegalArgumentException`; 50k-element `JsonElement` round-trip fuzz is lossless with `serializeNulls()` (nulls in *trees* being dropped under the default `serializeNulls=false` is the documented, test-asserted semantics).
+- JsonReader/JsonWriter state machines, close semantics, path tracking: consistent with their contracts and fully test-covered.
+
+The four fixes are in the working tree as uncommitted edits (`git diff --stat`: 4 files, +70/−19); I made no commits since none were requested.

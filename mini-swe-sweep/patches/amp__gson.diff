@@ -1,0 +1,291 @@
+diff --git a/codegen/src/main/java/com/google/gson/codegen/JavaWriter.java b/codegen/src/main/java/com/google/gson/codegen/JavaWriter.java
+index ccba6c8..098a499 100644
+--- a/codegen/src/main/java/com/google/gson/codegen/JavaWriter.java
++++ b/codegen/src/main/java/com/google/gson/codegen/JavaWriter.java
+@@ -350,19 +350,19 @@ public final class JavaWriter {
+           result.append("\\\\");
+           break;
+         case '\t':
+-          result.append("\\\t");
++          result.append("\\t");
+           break;
+         case '\b':
+-          result.append("\\\b");
++          result.append("\\b");
+           break;
+         case '\n':
+-          result.append("\\\n");
++          result.append("\\n");
+           break;
+         case '\r':
+-          result.append("\\\r");
++          result.append("\\r");
+           break;
+         case '\f':
+-          result.append("\\\f");
++          result.append("\\f");
+           break;
+         default:
+           result.append(c);
+diff --git a/gson/src/main/java/com/google/gson/Gson.java b/gson/src/main/java/com/google/gson/Gson.java
+index e97b162..bfcfc64 100644
+--- a/gson/src/main/java/com/google/gson/Gson.java
++++ b/gson/src/main/java/com/google/gson/Gson.java
+@@ -717,6 +717,7 @@ public final class Gson {
+     if (prettyPrinting) {
+       jsonWriter.setIndent("  ");
+     }
++    jsonWriter.setHtmlSafe(htmlSafe);
+     jsonWriter.setSerializeNulls(serializeNulls);
+     return jsonWriter;
+   }
+@@ -981,7 +982,7 @@ public final class Gson {
+   public String toString() {
+     return new StringBuilder("{serializeNulls:")
+         .append(serializeNulls)
+-        .append("factories:").append(factories)
++        .append(",factories:").append(factories)
+         .append(",instanceCreators:").append(constructorConstructor)
+         .append("}")
+         .toString();
+diff --git a/gson/src/main/java/com/google/gson/GsonBuilder.java b/gson/src/main/java/com/google/gson/GsonBuilder.java
+index 0c917d4..ade482a 100644
+--- a/gson/src/main/java/com/google/gson/GsonBuilder.java
++++ b/gson/src/main/java/com/google/gson/GsonBuilder.java
+@@ -577,7 +577,7 @@ public final class GsonBuilder {
+     DefaultDateTypeAdapter dateTypeAdapter;
+     if (datePattern != null && !"".equals(datePattern.trim())) {
+       dateTypeAdapter = new DefaultDateTypeAdapter(datePattern);
+-    } else if (dateStyle != DateFormat.DEFAULT && timeStyle != DateFormat.DEFAULT) {
++    } else if (dateStyle != DateFormat.DEFAULT || timeStyle != DateFormat.DEFAULT) {
+       dateTypeAdapter = new DefaultDateTypeAdapter(dateStyle, timeStyle);
+     } else {
+       return;
+diff --git a/gson/src/main/java/com/google/gson/internal/$Gson$Types.java b/gson/src/main/java/com/google/gson/internal/$Gson$Types.java
+index 017e27c..8edee07 100644
+--- a/gson/src/main/java/com/google/gson/internal/$Gson$Types.java
++++ b/gson/src/main/java/com/google/gson/internal/$Gson$Types.java
+@@ -27,6 +27,7 @@ import java.lang.reflect.TypeVariable;
+ import java.lang.reflect.WildcardType;
+ import java.util.Arrays;
+ import java.util.Collection;
++import java.util.HashMap;
+ import java.util.Map;
+ import java.util.NoSuchElementException;
+ import java.util.Properties;
+@@ -75,7 +76,13 @@ public final class $Gson$Types {
+    * this returns {@code ?}, which is shorthand for {@code ? extends Object}.
+    */
+   public static WildcardType subtypeOf(Type bound) {
+-    return new WildcardTypeImpl(new Type[] { bound }, EMPTY_TYPE_ARRAY);
++    Type[] upperBounds;
++    if (bound instanceof WildcardType) {
++      upperBounds = ((WildcardType) bound).getUpperBounds();
++    } else {
++      upperBounds = new Type[] { bound };
++    }
++    return new WildcardTypeImpl(upperBounds, EMPTY_TYPE_ARRAY);
+   }
+ 
+   /**
+@@ -84,7 +91,13 @@ public final class $Gson$Types {
+    * super String}.
+    */
+   public static WildcardType supertypeOf(Type bound) {
+-    return new WildcardTypeImpl(new Type[] { Object.class }, new Type[] { bound });
++    Type[] lowerBounds;
++    if (bound instanceof WildcardType) {
++      lowerBounds = ((WildcardType) bound).getLowerBounds();
++    } else {
++      lowerBounds = new Type[] { bound };
++    }
++    return new WildcardTypeImpl(new Type[] { Object.class }, lowerBounds);
+   }
+ 
+   /**
+@@ -322,40 +335,63 @@ public final class $Gson$Types {
+   }
+ 
+   public static Type resolve(Type context, Class<?> contextRawType, Type toResolve) {
++    return resolve(context, contextRawType, toResolve, new HashMap<TypeVariable<?>, Type>());
++  }
++
++  private static Type resolve(Type context, Class<?> contextRawType, Type toResolve,
++                              Map<TypeVariable<?>, Type> visitedTypeVariables) {
+     // this implementation is made a little more complicated in an attempt to avoid object-creation
++    TypeVariable<?> resolving = null;
+     while (true) {
+       if (toResolve instanceof TypeVariable) {
+         TypeVariable<?> typeVariable = (TypeVariable<?>) toResolve;
++        Type previouslyResolved = visitedTypeVariables.get(typeVariable);
++        if (previouslyResolved != null) {
++          // cannot reduce due to infinite recursion
++          return (previouslyResolved == Void.TYPE) ? toResolve : previouslyResolved;
++        }
++
++        // Insert a placeholder to mark the fact that we are in the process of resolving this type
++        visitedTypeVariables.put(typeVariable, Void.TYPE);
++        if (resolving == null) {
++          resolving = typeVariable;
++        }
++
+         toResolve = resolveTypeVariable(context, contextRawType, typeVariable);
+         if (toResolve == typeVariable) {
+-          return toResolve;
++          break;
+         }
+ 
+       } else if (toResolve instanceof Class && ((Class<?>) toResolve).isArray()) {
+         Class<?> original = (Class<?>) toResolve;
+         Type componentType = original.getComponentType();
+-        Type newComponentType = resolve(context, contextRawType, componentType);
+-        return componentType == newComponentType
++        Type newComponentType = resolve(context, contextRawType, componentType,
++            visitedTypeVariables);
++        toResolve = componentType == newComponentType
+             ? original
+             : arrayOf(newComponentType);
++        break;
+ 
+       } else if (toResolve instanceof GenericArrayType) {
+         GenericArrayType original = (GenericArrayType) toResolve;
+         Type componentType = original.getGenericComponentType();
+-        Type newComponentType = resolve(context, contextRawType, componentType);
+-        return componentType == newComponentType
++        Type newComponentType = resolve(context, contextRawType, componentType,
++            visitedTypeVariables);
++        toResolve = componentType == newComponentType
+             ? original
+             : arrayOf(newComponentType);
++        break;
+ 
+       } else if (toResolve instanceof ParameterizedType) {
+         ParameterizedType original = (ParameterizedType) toResolve;
+         Type ownerType = original.getOwnerType();
+-        Type newOwnerType = resolve(context, contextRawType, ownerType);
++        Type newOwnerType = resolve(context, contextRawType, ownerType, visitedTypeVariables);
+         boolean changed = newOwnerType != ownerType;
+ 
+         Type[] args = original.getActualTypeArguments();
+         for (int t = 0, length = args.length; t < length; t++) {
+-          Type resolvedTypeArgument = resolve(context, contextRawType, args[t]);
++          Type resolvedTypeArgument = resolve(context, contextRawType, args[t],
++              visitedTypeVariables);
+           if (resolvedTypeArgument != args[t]) {
+             if (!changed) {
+               args = args.clone();
+@@ -365,9 +401,10 @@ public final class $Gson$Types {
+           }
+         }
+ 
+-        return changed
++        toResolve = changed
+             ? newParameterizedTypeWithOwner(newOwnerType, original.getRawType(), args)
+             : original;
++        break;
+ 
+       } else if (toResolve instanceof WildcardType) {
+         WildcardType original = (WildcardType) toResolve;
+@@ -375,22 +412,32 @@ public final class $Gson$Types {
+         Type[] originalUpperBound = original.getUpperBounds();
+ 
+         if (originalLowerBound.length == 1) {
+-          Type lowerBound = resolve(context, contextRawType, originalLowerBound[0]);
++          Type lowerBound = resolve(context, contextRawType, originalLowerBound[0],
++              visitedTypeVariables);
+           if (lowerBound != originalLowerBound[0]) {
+-            return supertypeOf(lowerBound);
++            toResolve = supertypeOf(lowerBound);
++            break;
+           }
+         } else if (originalUpperBound.length == 1) {
+-          Type upperBound = resolve(context, contextRawType, originalUpperBound[0]);
++          Type upperBound = resolve(context, contextRawType, originalUpperBound[0],
++              visitedTypeVariables);
+           if (upperBound != originalUpperBound[0]) {
+-            return subtypeOf(upperBound);
++            toResolve = subtypeOf(upperBound);
++            break;
+           }
+         }
+-        return original;
++        toResolve = original;
++        break;
+ 
+       } else {
+-        return toResolve;
++        break;
+       }
+     }
++    // ensure that any in-process resolution gets updated with the final result
++    if (resolving != null) {
++      visitedTypeVariables.put(resolving, toResolve);
++    }
++    return toResolve;
+   }
+ 
+   static Type resolveTypeVariable(Type context, Class<?> contextRawType, TypeVariable<?> unknown) {
+diff --git a/gson/src/main/java/com/google/gson/internal/bind/JsonTreeReader.java b/gson/src/main/java/com/google/gson/internal/bind/JsonTreeReader.java
+index 0121231..f0afe85 100644
+--- a/gson/src/main/java/com/google/gson/internal/bind/JsonTreeReader.java
++++ b/gson/src/main/java/com/google/gson/internal/bind/JsonTreeReader.java
+@@ -91,6 +91,7 @@ public final class JsonTreeReader extends JsonReader {
+ 
+   @Override public void endObject() throws IOException {
+     expect(JsonToken.END_OBJECT);
++    pathNames[stackSize - 1] = null; // Free the last path name so that it can be garbage collected!
+     popStack(); // empty iterator
+     popStack(); // object
+     if (stackSize > 0) {
+@@ -100,7 +101,8 @@ public final class JsonTreeReader extends JsonReader {
+ 
+   @Override public boolean hasNext() throws IOException {
+     JsonToken token = peek();
+-    return token != JsonToken.END_OBJECT && token != JsonToken.END_ARRAY;
++    return token != JsonToken.END_OBJECT && token != JsonToken.END_ARRAY
++        && token != JsonToken.END_DOCUMENT;
+   }
+ 
+   @Override public JsonToken peek() throws IOException {
+diff --git a/gson/src/main/java/com/google/gson/stream/JsonReader.java b/gson/src/main/java/com/google/gson/stream/JsonReader.java
+index 9c55c43..6a98b4e 100644
+--- a/gson/src/main/java/com/google/gson/stream/JsonReader.java
++++ b/gson/src/main/java/com/google/gson/stream/JsonReader.java
+@@ -413,7 +413,7 @@ public class JsonReader implements Closeable {
+     if (p == PEEKED_NONE) {
+       p = doPeek();
+     }
+-    return p != PEEKED_END_OBJECT && p != PEEKED_END_ARRAY;
++    return p != PEEKED_END_OBJECT && p != PEEKED_END_ARRAY && p != PEEKED_EOF;
+   }
+ 
+   /**
+@@ -728,7 +728,8 @@ public class JsonReader implements Closeable {
+     }
+ 
+     // We've read a complete number. Decide if it's a PEEKED_LONG or a PEEKED_NUMBER.
+-    if (last == NUMBER_CHAR_DIGIT && fitsInLong && (value != Long.MIN_VALUE || negative)) {
++    if (last == NUMBER_CHAR_DIGIT && fitsInLong && (value != Long.MIN_VALUE || negative)
++        && (value != 0 || !negative)) {
+       peekedLong = negative ? value : -value;
+       pos += i;
+       return peeked = PEEKED_LONG;
+diff --git a/gson/src/main/java/com/google/gson/stream/JsonWriter.java b/gson/src/main/java/com/google/gson/stream/JsonWriter.java
+index e2fc196..316adec 100644
+--- a/gson/src/main/java/com/google/gson/stream/JsonWriter.java
++++ b/gson/src/main/java/com/google/gson/stream/JsonWriter.java
+@@ -487,11 +487,12 @@ public class JsonWriter implements Closeable, Flushable {
+    * Encodes {@code value}.
+    *
+    * @param value a finite value. May not be {@link Double#isNaN() NaNs} or
+-   *     {@link Double#isInfinite() infinities}.
++   *     {@link Double#isInfinite() infinities} unless this writer is
++   *     {@link #setLenient(boolean) lenient}.
+    * @return this writer.
+    */
+   public JsonWriter value(double value) throws IOException {
+-    if (Double.isNaN(value) || Double.isInfinite(value)) {
++    if (!lenient && (Double.isNaN(value) || Double.isInfinite(value))) {
+       throw new IllegalArgumentException("Numeric values must be finite, but was " + value);
+     }
+     writeDeferredName();

@@ -1,0 +1,54 @@
+diff --git a/src/Compilers/CSharp/Portable/Lowering/LocalRewriter/LocalRewriter.DecisionDagRewriter.cs b/src/Compilers/CSharp/Portable/Lowering/LocalRewriter/LocalRewriter.DecisionDagRewriter.cs
+index 830adb8f..41c6a575 100644
+--- a/src/Compilers/CSharp/Portable/Lowering/LocalRewriter/LocalRewriter.DecisionDagRewriter.cs
++++ b/src/Compilers/CSharp/Portable/Lowering/LocalRewriter/LocalRewriter.DecisionDagRewriter.cs
+@@ -924,8 +924,8 @@ private void EnsureStringHashFunction(int labelsCount, SyntaxNode syntaxNode, St
+                 if (privateImplClass.PrivateImplementationDetails.GetMethod(stringPatternInput switch
+                 {
+                     StringPatternInput.String => CodeAnalysis.CodeGen.PrivateImplementationDetails.SynthesizedStringHashFunctionName,
+-                    StringPatternInput.SpanChar => CodeAnalysis.CodeGen.PrivateImplementationDetails.SynthesizedReadOnlySpanHashFunctionName,
+-                    StringPatternInput.ReadOnlySpanChar => CodeAnalysis.CodeGen.PrivateImplementationDetails.SynthesizedSpanHashFunctionName,
++                    StringPatternInput.SpanChar => CodeAnalysis.CodeGen.PrivateImplementationDetails.SynthesizedSpanHashFunctionName,
++                    StringPatternInput.ReadOnlySpanChar => CodeAnalysis.CodeGen.PrivateImplementationDetails.SynthesizedReadOnlySpanHashFunctionName,
+                     _ => throw ExceptionUtilities.UnexpectedValue(stringPatternInput),
+                 }) != null)
+                 {
+diff --git a/src/Compilers/CSharp/Portable/Lowering/LocalRewriter/LocalRewriter_IndexerAccess.cs b/src/Compilers/CSharp/Portable/Lowering/LocalRewriter/LocalRewriter_IndexerAccess.cs
+index e817e472..cca2ac2a 100644
+--- a/src/Compilers/CSharp/Portable/Lowering/LocalRewriter/LocalRewriter_IndexerAccess.cs
++++ b/src/Compilers/CSharp/Portable/Lowering/LocalRewriter/LocalRewriter_IndexerAccess.cs
+@@ -1010,7 +1010,7 @@ private BoundExpression VisitRangePatternIndexerAccess(BoundImplicitIndexerAcces
+                     var rangeSizeLocal = F.StoreToTemp(rangeSizeExpr, out var rangeSizeStore);
+                     localsBuilder.Add(rangeSizeLocal.LocalSymbol);
+                     sideEffectsBuilder.Add(rangeSizeStore);
+-                    rangeSizeExpr = startLocal;
++                    rangeSizeExpr = rangeSizeLocal;
+                 }
+             }
+             else
+diff --git a/src/Compilers/CSharp/Portable/Lowering/SyntheticBoundNodeFactory.cs b/src/Compilers/CSharp/Portable/Lowering/SyntheticBoundNodeFactory.cs
+index ab1eac57..a5bd88b1 100644
+--- a/src/Compilers/CSharp/Portable/Lowering/SyntheticBoundNodeFactory.cs
++++ b/src/Compilers/CSharp/Portable/Lowering/SyntheticBoundNodeFactory.cs
+@@ -1780,7 +1780,7 @@ internal BoundExpression MakeNullCheck(SyntaxNode syntax, BoundExpression rewrit
+                     case BinaryOperatorKind.Equal:
+                         return Literal(ConstantValue.Create(rewrittenExpr.ConstantValueOpt.IsNull, ConstantValueTypeDiscriminator.Boolean), boolType);
+                     case BinaryOperatorKind.NotEqual:
+-                        return Literal(ConstantValue.Create(rewrittenExpr.ConstantValueOpt.IsNull, ConstantValueTypeDiscriminator.Boolean), boolType);
++                        return Literal(ConstantValue.Create(!rewrittenExpr.ConstantValueOpt.IsNull, ConstantValueTypeDiscriminator.Boolean), boolType);
+                 }
+             }
+ 
+diff --git a/src/Workspaces/Core/Portable/Classification/ClassifierHelper.cs b/src/Workspaces/Core/Portable/Classification/ClassifierHelper.cs
+index 9dd78f36..acc21718 100644
+--- a/src/Workspaces/Core/Portable/Classification/ClassifierHelper.cs
++++ b/src/Workspaces/Core/Portable/Classification/ClassifierHelper.cs
+@@ -94,7 +94,7 @@ await AddClassifiedSpansAsync(classifiedSpans, document, [span], options, includ
+             RemoveAdditiveSpans(semanticSpans);
+         }
+ 
+-        var widenedSpan = new TextSpan(spans[0].Start, spans[^1].End);
++        var widenedSpan = TextSpan.FromBounds(spans[0].Start, spans[^1].End);
+         MergeClassifiedSpans(syntaxSpans, semanticSpans, widenedSpan, classifiedSpans);
+     }
+ 

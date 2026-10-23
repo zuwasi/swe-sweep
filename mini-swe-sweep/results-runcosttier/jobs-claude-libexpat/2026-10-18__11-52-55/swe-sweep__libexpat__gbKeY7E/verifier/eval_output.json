@@ -1,0 +1,41 @@
+{
+  "baseline_suite": null,
+  "post_suite": {
+    "command": "suite.run_tests (whole suite)",
+    "returncode": null,
+    "text": "ctest rc=0\nInternal ctest changing into directory: /build\nTest project /build\n    Start 1: runtests\n    Start 2: runtestspp\n1/2 Test #1: runtests .........................   Passed    0.27 sec\n2/2 Test #2: runtestspp .......................   Passed    0.34 sec\n\n100% tests passed, 0 tests failed out of 2\n\nTotal Test time (real) =   0.34 sec\n\n",
+    "truncated": false
+  },
+  "subtasks": {
+    "libexpat-0c5dbd0bb0a5": {
+      "command": "suite.run_tests (selected)",
+      "returncode": null,
+      "text": "ctest rc=8\nInternal ctest changing into directory: /build\nTest project /build\n    Start 2: runtestspp\n    Start 1: runtests\n1/2 Test #2: runtestspp .......................***Failed    0.33 sec\nERROR: Unexpected status from parsing\nExpat version: expat_2.4.3\nFAIL: test_amplification_isolated_external_parser (during actual test at /libexpat/expat/tests/runtests.c:11659)\n99%: Checks: 336, Failed: 1\n\n2/2 Test #1: runtests .........................***Failed    0.36 sec\nERROR: Unexpected status from parsing\nExpat version: expat_2.4.3\nFAIL: test_amplification_isolated_external_parser (during actual test at /libexpat/expat/tests/runtests.c:11659)\n99%: Checks: 336, Failed: 1\n\n\n0% tests passed, 2 tests failed out of 2\n\nTotal Test time (real) =   0.36 sec\n\nThe following tests FAILED:\n\t  1 - runtests (Failed)\n\t  2 - runtestspp (Failed)\nErrors while running CTest\n\n",
+      "truncated": false
+    },
+    "libexpat-30d93b149d3d": {
+      "command": "suite.run_tests (selected)",
+      "returncode": null,
+      "text": "ctest rc=8\nInternal ctest changing into directory: /build\nTest project /build\n    Start 1: runtests\n    Start 2: runtestspp\n1/2 Test #1: runtests .........................***Failed    0.33 sec\nERROR: wrong number of data characters: got 31, expected 38\nExpat version: expat_2.4.3\nFAIL: test_nested_entity_suspend (during actual test at /libexpat/expat/tests/chardata.c:92)\n99%: Checks: 336, Failed: 1\n\n2/2 Test #2: runtestspp .......................***Failed    0.36 sec\nERROR: wrong number of data characters: got 31, expected 38\nExpat version: expat_2.4.3\nFAIL: test_nested_entity_suspend (during actual test at /libexpat/expat/tests/chardata.c:92)\n99%: Checks: 336, Failed: 1\n\n\n0% tests passed, 2 tests failed out of 2\n\nTotal Test time (real) =   0.37 sec\n\nThe following tests FAILED:\n\t  1 - runtests (Failed)\n\t  2 - runtestspp (Failed)\nErrors while running CTest\n\n",
+      "truncated": false
+    },
+    "libexpat-44558a21f1b7": {
+      "command": "suite.run_tests (selected)",
+      "returncode": null,
+      "text": "ctest rc=0\nInternal ctest changing into directory: /build\nTest project /build\n    Start 1: runtests\n    Start 2: runtestspp\n1/2 Test #1: runtests .........................   Passed    0.29 sec\n2/2 Test #2: runtestspp .......................   Passed    0.32 sec\n\n100% tests passed, 0 tests failed out of 2\n\nTotal Test time (real) =   0.32 sec\n\n",
+      "truncated": false
+    },
+    "libexpat-4e25524fb119": {
+      "command": "suite.run_tests (selected)",
+      "returncode": null,
+      "text": "ctest rc=8\nInternal ctest changing into directory: /build\nTest project /build\n    Start 2: runtestspp\n    Start 1: runtests\n1/2 Test #2: runtestspp .......................***Failed    0.24 sec\nERROR: wrong number of data characters: got 12, expected 7\nExpat version: expat_2.4.3\nFAIL: test_pool_integrity_with_unfinished_attr (during actual test at /libexpat/expat/tests/chardata.c:92)\n99%: Checks: 336, Failed: 1\n\n2/2 Test #1: runtests .........................***Failed    0.31 sec\nERROR: wrong number of data characters: got 12, expected 7\nExpat version: expat_2.4.3\nFAIL: test_pool_integrity_with_unfinished_attr (during actual test at /libexpat/expat/tests/chardata.c:92)\n99%: Checks: 336, Failed: 1\n\n\n0% tests passed, 2 tests failed out of 2\n\nTotal Test time (real) =   0.31 sec\n\nThe following tests FAILED:\n\t  1 - runtests (Failed)\n\t  2 - runtestspp (Failed)\nErrors while running CTest\n\n",
+      "truncated": false
+    },
+    "libexpat-69f40cffb664": {
+      "command": "suite.run_tests (selected)",
+      "returncode": null,
+      "text": "ctest rc=8\nInternal ctest changing into directory: /build\nTest project /build\n    Start 1: runtests\n    Start 2: runtestspp\n1/2 Test #1: runtests .........................***Failed    0.31 sec\nERROR: wrong number of data characters: got 12, expected 7\nExpat version: expat_2.4.3\nFAIL: test_pool_integrity_with_unfinished_attr (during actual test at /libexpat/expat/tests/chardata.c:92)\n99%: Checks: 336, Failed: 1\n\n2/2 Test #2: runtestspp .......................***Failed    0.32 sec\nERROR: wrong number of data characters: got 12, expected 7\nExpat version: expat_2.4.3\nFAIL: test_pool_integrity_with_unfinished_attr (during actual test at /libexpat/expat/tests/chardata.c:92)\n99%: Checks: 336, Failed: 1\n\n\n0% tests passed, 2 tests failed out of 2\n\nTotal Test time (real) =   0.32 sec\n\nThe following tests FAILED:\n\t  1 - runtests (Failed)\n\t  2 - runtestspp (Failed)\nErrors while running CTest\n\n",
+      "truncated": false
+    }
+  }
+}

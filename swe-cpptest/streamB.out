@@ -1,0 +1,6 @@
+tarantool [Recommended Rules]: Source Files to Check: 3503, Violations Found: 1239
+tarantool [Flow Analysis Standard]: Source Files to Check: 3503, Violations Found: 2305
+tarantool [Flow Analysis Aggressive]: Source Files to Check: 3503, Violations Found: 3570
+tarantool [MISRA C 2025]: Source Files to Check: 3503, Violations Found: 79364
+tarantool [MISRA C++ 2023]: Source Files to Check: 3503, Violations Found: 60154
+tarantool [Flow Analysis Aggressive]: Source Files to Check: 3503, Violations Found: 3571

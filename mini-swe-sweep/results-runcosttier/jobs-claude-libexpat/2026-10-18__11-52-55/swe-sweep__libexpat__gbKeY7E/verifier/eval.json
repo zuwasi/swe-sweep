@@ -1,0 +1,157 @@
+{
+  "evaluated_at": "20261018T085521",
+  "version": "2.4.3",
+  "score": 0.2,
+  "visible_ok": true,
+  "agent_patch_applied": true,
+  "agent_build_ok": true,
+  "agent_patch_error": null,
+  "build_error": null,
+  "regressions": [],
+  "visible_tests": {
+    "runtests": "passed",
+    "runtestspp": "passed"
+  },
+  "n_subtasks": 5,
+  "n_resolved": 1,
+  "n_partial": 0,
+  "subtasks": [
+    {
+      "subtask_id": "libexpat-0c5dbd0bb0a5",
+      "resolved": false,
+      "partial": false,
+      "test_applied": true,
+      "targeted": [
+        "runtests"
+      ],
+      "n_passed": 0,
+      "n_failed": 2,
+      "duration_s": 3.655,
+      "detail": {},
+      "has_split": true,
+      "f2p_passed": [],
+      "p2p_passed": [],
+      "f2p_failed": [
+        "runtests",
+        "runtestspp"
+      ],
+      "p2p_failed": []
+    },
+    {
+      "subtask_id": "libexpat-30d93b149d3d",
+      "resolved": false,
+      "partial": false,
+      "test_applied": true,
+      "targeted": [
+        "runtests"
+      ],
+      "n_passed": 0,
+      "n_failed": 2,
+      "duration_s": 4.089,
+      "detail": {},
+      "has_split": true,
+      "f2p_passed": [],
+      "p2p_passed": [],
+      "f2p_failed": [
+        "runtests",
+        "runtestspp"
+      ],
+      "p2p_failed": []
+    },
+    {
+      "subtask_id": "libexpat-44558a21f1b7",
+      "resolved": true,
+      "partial": false,
+      "test_applied": true,
+      "targeted": [
+        "runtests"
+      ],
+      "n_passed": 2,
+      "n_failed": 0,
+      "duration_s": 3.889,
+      "detail": {},
+      "has_split": true,
+      "f2p_passed": [
+        "runtests",
+        "runtestspp"
+      ],
+      "p2p_passed": [],
+      "f2p_failed": [],
+      "p2p_failed": []
+    },
+    {
+      "subtask_id": "libexpat-4e25524fb119",
+      "resolved": false,
+      "partial": false,
+      "test_applied": true,
+      "targeted": [
+        "runtests"
+      ],
+      "n_passed": 0,
+      "n_failed": 2,
+      "duration_s": 3.542,
+      "detail": {},
+      "has_split": true,
+      "f2p_passed": [],
+      "p2p_passed": [],
+      "f2p_failed": [
+        "runtests",
+        "runtestspp"
+      ],
+      "p2p_failed": []
+    },
+    {
+      "subtask_id": "libexpat-69f40cffb664",
+      "resolved": false,
+      "partial": false,
+      "test_applied": true,
+      "targeted": [
+        "runtests"
+      ],
+      "n_passed": 0,
+      "n_failed": 2,
+      "duration_s": 0.483,
+      "detail": {},
+      "has_split": true,
+      "f2p_passed": [],
+      "p2p_passed": [],
+      "f2p_failed": [
+        "runtests",
+        "runtestspp"
+      ],
+      "p2p_failed": []
+    }
+  ],
+  "patch_stats": {
+    "files_edited": [
+      "expat/lib/xmlparse.c",
+      "expat/lib/xmltok.c",
+      "expat/lib/xmltok_impl.c",
+      "expat/xmlwf/xmlwf.c"
+    ],
+    "lines_added": 225,
+    "lines_removed": 54,
+    "target_files": [
+      "expat/lib/xmlparse.c",
+      "expat/lib/xmltok.c",
+      "expat/lib/xmltok_impl.c"
+    ],
+    "on_target_files": [
+      "expat/lib/xmlparse.c",
+      "expat/lib/xmltok.c",
+      "expat/lib/xmltok_impl.c"
+    ],
+    "off_target_files": [
+      "expat/xmlwf/xmlwf.c"
+    ],
+    "target_coverage_pct": 100.0
+  },
+  "timings": {
+    "agent_apply_s": 0.008,
+    "post_suite_s": 4.183,
+    "subtasks_total_s": 15.659,
+    "total_s": 19.88
+  },
+  "error": null,
+  "oracle": false
+}

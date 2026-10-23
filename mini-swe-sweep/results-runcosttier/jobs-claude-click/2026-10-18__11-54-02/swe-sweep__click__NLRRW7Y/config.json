@@ -1,0 +1,15 @@
+{
+    "task": {
+        "path": "/tmp/swe-sweep-task-f_wkc_5j/swe-sweep__click"
+    },
+    "trial_name": "swe-sweep__click__NLRRW7Y",
+    "trials_dir": "/home/danie/mini-swe-sweep/results/jobs-claude-click/2026-10-18__11-54-02",
+    "verifier_timeout_multiplier": 0.4067796610169492,
+    "agent": {
+        "name": "swesweep.patch_agent:PatchAgent",
+        "kwargs": {
+            "patch_path": "/home/danie/mini-swe-sweep/patches/claude__click.diff"
+        }
+    },
+    "job_id": "6511b5ce-89ae-4102-8d88-f298118cb83c"
+}

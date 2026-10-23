@@ -1,0 +1,9 @@
+libexpat [MISRA C 2025]: Source Files to Check: 48, Violations Found: 14296
+libexpat [MISRA C++ 2023]: Source Files to Check: 48, Violations Found: 13219
+libexpat [Flow Analysis Aggressive]: Source Files to Check: 48, Violations Found: 297
+hdf5 [MISRA C 2025]: Source Files to Check: 843, Violations Found: 59628
+hdf5 [MISRA C++ 2023]: Source Files to Check: 843, Violations Found: 39936
+hdf5 [Flow Analysis Aggressive]: Source Files to Check: 843, Violations Found: 3333
+z3 [MISRA C 2025]: Source Files to Check: 2022, Violations Found: 41704
+z3 [MISRA C++ 2023]: Source Files to Check: 2022, Violations Found: 54465
+z3 [Flow Analysis Aggressive]: Source Files to Check: 2022, Violations Found: 2986

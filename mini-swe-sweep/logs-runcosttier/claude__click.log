@@ -1,0 +1,17 @@
+The two review agents are still running. So far I've fixed one bug in `core.py`: the bracketed extras in option help were joined with `";"` instead of `"; "`. I'll continue when they report back.
+
+I fixed six bugs across five files. The test suite gives the same result as before I started: 487 passed and one failure, `test_bytes_args`. That test fails because the installed pytest won't let it set `sys.stdin.encoding`, not because of anything in click.
+
+The default `python` imports an installed click 8.1.8 rather than this repo. I ran the baseline and every later check with `PYTHONPATH=src` so the tests use the repo's code. The checked-out commit turned out to be the unmodified 8.0.1 release, so I looked for places where the code contradicts its own docstrings or plainly misuses an API.
+
+**Fixed:**
+1. **Context `show_default` didn't override the option's setting** (`core.py`, `Option.get_help_record`). The `Context` docstring says it "Overrides an option's `show_default` argument", but the code just OR-ed the two. A non-`None` context value now wins, so `context_settings={"show_default": False}` hides defaults even when an option sets `show_default=True`.
+2. **`Path(resolve_path=True)` mis-resolved relative symlinks** (`types.py`). It resolved the link's target against the current directory instead of the link's own directory, so the result could point to the wrong file. Checked: `/tmp/pt/sub/link` → `target` now gives `/tmp/pt/sub/target`.
+3. **Typo in the bash completion script** (`shell_completion.py`). `COMREPLY=()` is now `COMPREPLY=()`, the variable bash actually reads.
+4. **`re.sub` flag passed in the wrong position** (`shell_completion.py`, `func_name`). `re.ASCII` was being passed as the replacement count, not as a flag; it now uses `flags=re.ASCII`.
+5. **Reused `click.argument(..., cls=X)` lost its class** (`decorators.py`). The decorator removed `cls` from its shared settings on first use, so a second command got a plain `Argument`. It now copies them first, as `option()` already does. Checked: both commands now get the custom class.
+6. **Atomic file writes replaced the original even after an exception** (`_compat.py`, `_AtomicFile.close`). `__exit__` passed `delete=True` on error but `close()` ignored it, so a half-written file overwrote the original. The temporary file is now discarded instead. Checked: the original survives a failed write and a normal write still replaces it.
+
+**Found but not fixed:**
+- **`style()` overline and italic codes:** they are chosen by the `underline` flag instead of their own flags (`termui.py:598-601`). This is a real bug, but `test_styling` in `tests/test_utils.py` expects the current wrong output, so fixing it would break passing tests.
+- **Help-text separator:** I briefly changed `";"` to `"; "` between items like `[default: …]`, then reverted it because nothing in the repo says which is correct.

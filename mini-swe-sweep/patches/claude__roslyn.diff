@@ -1,0 +1,256 @@
+diff --git a/src/Compilers/CSharp/Portable/Lowering/LocalRewriter/LocalRewriter.DecisionDagRewriter.cs b/src/Compilers/CSharp/Portable/Lowering/LocalRewriter/LocalRewriter.DecisionDagRewriter.cs
+index 830adb8f..41c6a575 100644
+--- a/src/Compilers/CSharp/Portable/Lowering/LocalRewriter/LocalRewriter.DecisionDagRewriter.cs
++++ b/src/Compilers/CSharp/Portable/Lowering/LocalRewriter/LocalRewriter.DecisionDagRewriter.cs
+@@ -924,8 +924,8 @@ private void EnsureStringHashFunction(int labelsCount, SyntaxNode syntaxNode, St
+                 if (privateImplClass.PrivateImplementationDetails.GetMethod(stringPatternInput switch
+                 {
+                     StringPatternInput.String => CodeAnalysis.CodeGen.PrivateImplementationDetails.SynthesizedStringHashFunctionName,
+-                    StringPatternInput.SpanChar => CodeAnalysis.CodeGen.PrivateImplementationDetails.SynthesizedReadOnlySpanHashFunctionName,
+-                    StringPatternInput.ReadOnlySpanChar => CodeAnalysis.CodeGen.PrivateImplementationDetails.SynthesizedSpanHashFunctionName,
++                    StringPatternInput.SpanChar => CodeAnalysis.CodeGen.PrivateImplementationDetails.SynthesizedSpanHashFunctionName,
++                    StringPatternInput.ReadOnlySpanChar => CodeAnalysis.CodeGen.PrivateImplementationDetails.SynthesizedReadOnlySpanHashFunctionName,
+                     _ => throw ExceptionUtilities.UnexpectedValue(stringPatternInput),
+                 }) != null)
+                 {
+diff --git a/src/Compilers/CSharp/Portable/Lowering/LocalRewriter/LocalRewriter_IndexerAccess.cs b/src/Compilers/CSharp/Portable/Lowering/LocalRewriter/LocalRewriter_IndexerAccess.cs
+index e817e472..cca2ac2a 100644
+--- a/src/Compilers/CSharp/Portable/Lowering/LocalRewriter/LocalRewriter_IndexerAccess.cs
++++ b/src/Compilers/CSharp/Portable/Lowering/LocalRewriter/LocalRewriter_IndexerAccess.cs
+@@ -1010,7 +1010,7 @@ private BoundExpression VisitRangePatternIndexerAccess(BoundImplicitIndexerAcces
+                     var rangeSizeLocal = F.StoreToTemp(rangeSizeExpr, out var rangeSizeStore);
+                     localsBuilder.Add(rangeSizeLocal.LocalSymbol);
+                     sideEffectsBuilder.Add(rangeSizeStore);
+-                    rangeSizeExpr = startLocal;
++                    rangeSizeExpr = rangeSizeLocal;
+                 }
+             }
+             else
+diff --git a/src/Compilers/CSharp/Portable/Lowering/SyntheticBoundNodeFactory.cs b/src/Compilers/CSharp/Portable/Lowering/SyntheticBoundNodeFactory.cs
+index ab1eac57..a5bd88b1 100644
+--- a/src/Compilers/CSharp/Portable/Lowering/SyntheticBoundNodeFactory.cs
++++ b/src/Compilers/CSharp/Portable/Lowering/SyntheticBoundNodeFactory.cs
+@@ -1780,7 +1780,7 @@ internal BoundExpression MakeNullCheck(SyntaxNode syntax, BoundExpression rewrit
+                     case BinaryOperatorKind.Equal:
+                         return Literal(ConstantValue.Create(rewrittenExpr.ConstantValueOpt.IsNull, ConstantValueTypeDiscriminator.Boolean), boolType);
+                     case BinaryOperatorKind.NotEqual:
+-                        return Literal(ConstantValue.Create(rewrittenExpr.ConstantValueOpt.IsNull, ConstantValueTypeDiscriminator.Boolean), boolType);
++                        return Literal(ConstantValue.Create(!rewrittenExpr.ConstantValueOpt.IsNull, ConstantValueTypeDiscriminator.Boolean), boolType);
+                 }
+             }
+ 
+diff --git a/src/Compilers/CSharp/Portable/SymbolDisplay/SymbolDisplayVisitor.Members.cs b/src/Compilers/CSharp/Portable/SymbolDisplay/SymbolDisplayVisitor.Members.cs
+index 60211bf6..70eab632 100644
+--- a/src/Compilers/CSharp/Portable/SymbolDisplay/SymbolDisplayVisitor.Members.cs
++++ b/src/Compilers/CSharp/Portable/SymbolDisplay/SymbolDisplayVisitor.Members.cs
+@@ -341,7 +341,7 @@ public override void VisitMethod(IMethodSymbol symbol)
+                             // Otherwise we eschew it since it is redundant in a conversion
+                             // signature.
+                             if (Format.CompilerInternalOptions.IncludesOption(SymbolDisplayCompilerInternalOptions.UseMetadataMemberNames) ||
+-                                tryGetUserDefinedOperatorTokenKind(symbol.MetadataName) == SyntaxKind.None)
++                                tryGetUserDefinedConversionTokenKind(symbol.MetadataName) == SyntaxKind.None)
+                             {
+                                 goto default;
+                             }
+diff --git a/src/Compilers/CSharp/Portable/Syntax/SyntaxNormalizer.cs b/src/Compilers/CSharp/Portable/Syntax/SyntaxNormalizer.cs
+index 9ce1d27a..63237e4b 100644
+--- a/src/Compilers/CSharp/Portable/Syntax/SyntaxNormalizer.cs
++++ b/src/Compilers/CSharp/Portable/Syntax/SyntaxNormalizer.cs
+@@ -619,7 +619,7 @@ private static bool NeedsSeparatorForListPattern(SyntaxToken token, SyntaxToken
+             }
+ 
+             // is [1, 2]$$list
+-            if (token.IsKind(SyntaxKind.OpenBracketToken))
++            if (token.IsKind(SyntaxKind.CloseBracketToken))
+             {
+                 return listPattern.Designation is not null;
+             }
+diff --git a/src/Compilers/Core/Portable/Text/SubText.cs b/src/Compilers/Core/Portable/Text/SubText.cs
+index e59db988..db066d1b 100644
+--- a/src/Compilers/Core/Portable/Text/SubText.cs
++++ b/src/Compilers/Core/Portable/Text/SubText.cs
+@@ -56,7 +56,7 @@ internal override SourceText StorageKey
+         {
+             get
+             {
+-                if (position < 0 || position > this.Length)
++                if (position < 0 || position >= this.Length)
+                 {
+                     throw new ArgumentOutOfRangeException(nameof(position));
+                 }
+diff --git a/src/Dependencies/Collections/Internal/SegmentedArraySegment`1.cs b/src/Dependencies/Collections/Internal/SegmentedArraySegment`1.cs
+index 69d490ea..d6cb0eb9 100644
+--- a/src/Dependencies/Collections/Internal/SegmentedArraySegment`1.cs
++++ b/src/Dependencies/Collections/Internal/SegmentedArraySegment`1.cs
+@@ -32,7 +32,7 @@ public SegmentedArraySegment(SegmentedArray<T> array, int start, int length)
+ 
+         public SegmentedArraySegment<T> Slice(int start)
+         {
+-            if ((uint)start >= (uint)Length)
++            if ((uint)start > (uint)Length)
+                 ThrowHelper.ThrowArgumentOutOfRangeException();
+ 
+             return new SegmentedArraySegment<T>(Array, Start + start, Length - start);
+diff --git a/src/Dependencies/Collections/OneOrMany.cs b/src/Dependencies/Collections/OneOrMany.cs
+index 01b2ec1d..1f212ade 100644
+--- a/src/Dependencies/Collections/OneOrMany.cs
++++ b/src/Dependencies/Collections/OneOrMany.cs
+@@ -226,7 +226,7 @@ public bool SequenceEqual(IEnumerable<T> other, IEqualityComparer<T>? comparer =
+                 first = false;
+             }
+ 
+-            return true;
++            return !first;
+         }
+ 
+         public Enumerator GetEnumerator()
+diff --git a/src/Dependencies/PooledObjects/ArrayBuilder.cs b/src/Dependencies/PooledObjects/ArrayBuilder.cs
+index 2c6e52b5..1611298c 100644
+--- a/src/Dependencies/PooledObjects/ArrayBuilder.cs
++++ b/src/Dependencies/PooledObjects/ArrayBuilder.cs
+@@ -314,7 +314,7 @@ public void RemoveAll<TArg>(Func<T, int, TArg, bool> match, TArg arg)
+             var i = 0;
+             for (var j = 0; j < _builder.Count; j++)
+             {
+-                if (!match(_builder[j], i, arg))
++                if (!match(_builder[j], j, arg))
+                 {
+                     if (i != j)
+                     {
+diff --git a/src/LanguageServer/Protocol/Handler/Completion/CompletionResultFactory.cs b/src/LanguageServer/Protocol/Handler/Completion/CompletionResultFactory.cs
+index 2d20dabd..bd6698c2 100644
+--- a/src/LanguageServer/Protocol/Handler/Completion/CompletionResultFactory.cs
++++ b/src/LanguageServer/Protocol/Handler/Completion/CompletionResultFactory.cs
+@@ -454,6 +454,9 @@ public bool Equals([AllowNull] ImmutableArray<CharacterSetModificationRule> x, [
+             if (x == y)
+                 return true;
+ 
++            if (x.Length != y.Length)
++                return false;
++
+             for (var i = 0; i < x.Length; i++)
+             {
+                 var xKind = x[i].Kind;
+diff --git a/src/LanguageServer/Protocol/Handler/OnAutoInsert/OnAutoInsertHandler.cs b/src/LanguageServer/Protocol/Handler/OnAutoInsert/OnAutoInsertHandler.cs
+index d46f2b9f..1265d7e5 100644
+--- a/src/LanguageServer/Protocol/Handler/OnAutoInsert/OnAutoInsertHandler.cs
++++ b/src/LanguageServer/Protocol/Handler/OnAutoInsert/OnAutoInsertHandler.cs
+@@ -194,7 +194,7 @@ internal sealed class OnAutoInsertHandler(
+             else
+             {
+                 // We're not on an empty line, clamp the line position to the actual line end.
+-                desiredCaretLinePosition = new LinePosition(desiredCaretLinePosition.Line, Math.Min(desiredCaretLinePosition.Character, caretLine.End));
++                desiredCaretLinePosition = new LinePosition(desiredCaretLinePosition.Line, Math.Min(desiredCaretLinePosition.Character, caretLine.Span.Length));
+             }
+         }
+ 
+diff --git a/src/LanguageServer/Protocol/Handler/Symbols/WorkspaceSymbolsHandler.cs b/src/LanguageServer/Protocol/Handler/Symbols/WorkspaceSymbolsHandler.cs
+index ffcf51aa..791e6c82 100644
+--- a/src/LanguageServer/Protocol/Handler/Symbols/WorkspaceSymbolsHandler.cs
++++ b/src/LanguageServer/Protocol/Handler/Symbols/WorkspaceSymbolsHandler.cs
+@@ -90,7 +90,7 @@ private sealed class LSPNavigateToCallback(
+                 var location = await ProtocolConversions.TextSpanToLocationAsync(
+                     document, result.NavigableItem.SourceSpan, result.NavigableItem.IsStale, context, cancellationToken).ConfigureAwait(false);
+                 if (location == null)
+-                    return;
++                    continue;
+ 
+                 var symbolInfo = SymbolInformationFactory.Create(
+                     result.Name,
+diff --git a/src/Workspaces/Core/Portable/Classification/ClassifierHelper.cs b/src/Workspaces/Core/Portable/Classification/ClassifierHelper.cs
+index 9dd78f36..acc21718 100644
+--- a/src/Workspaces/Core/Portable/Classification/ClassifierHelper.cs
++++ b/src/Workspaces/Core/Portable/Classification/ClassifierHelper.cs
+@@ -94,7 +94,7 @@ await AddClassifiedSpansAsync(classifiedSpans, document, [span], options, includ
+             RemoveAdditiveSpans(semanticSpans);
+         }
+ 
+-        var widenedSpan = new TextSpan(spans[0].Start, spans[^1].End);
++        var widenedSpan = TextSpan.FromBounds(spans[0].Start, spans[^1].End);
+         MergeClassifiedSpans(syntaxSpans, semanticSpans, widenedSpan, classifiedSpans);
+     }
+ 
+diff --git a/src/Workspaces/Core/Portable/FindSymbols/SymbolTree/SymbolTreeInfo_Serialization.cs b/src/Workspaces/Core/Portable/FindSymbols/SymbolTree/SymbolTreeInfo_Serialization.cs
+index 71dd9b10..109e2b88 100644
+--- a/src/Workspaces/Core/Portable/FindSymbols/SymbolTree/SymbolTreeInfo_Serialization.cs
++++ b/src/Workspaces/Core/Portable/FindSymbols/SymbolTree/SymbolTreeInfo_Serialization.cs
+@@ -181,6 +181,7 @@ static IEnumerable<ReadOnlyMemory<Node>> GroupByName(ReadOnlyMemory<Node> sorted
+                 {
+                     yield return sortedNodes[startIndex..i];
+                     startIndex = i;
++                    currentName = node.Name;
+                 }
+             }
+ 
+@@ -199,7 +200,7 @@ static IEnumerable<ReadOnlyMemory<Node>> GroupByName(ReadOnlyMemory<Node> sorted
+             var nodeCount = reader.ReadInt32();
+             using var _ = ArrayBuilder<Node>.GetInstance(nodeCount, out var nodes);
+ 
+-            for (var i = 0; i < nodeCount; i++)
++            while (nodes.Count < nodeCount)
+             {
+                 var name = reader.ReadRequiredString();
+                 var groupCount = reader.ReadInt32();
+diff --git a/src/Workspaces/Core/Portable/LinkedFileDiffMerging/LinkedFileDiffMergingSession.cs b/src/Workspaces/Core/Portable/LinkedFileDiffMerging/LinkedFileDiffMergingSession.cs
+index 240487ee..0c34840f 100644
+--- a/src/Workspaces/Core/Portable/LinkedFileDiffMerging/LinkedFileDiffMergingSession.cs
++++ b/src/Workspaces/Core/Portable/LinkedFileDiffMerging/LinkedFileDiffMergingSession.cs
+@@ -275,8 +275,8 @@ private static ImmutableArray<TextChange> NormalizeChanges(ImmutableArray<TextCh
+         var orderedChanges = changes.Sort(static (c1, c2) => c1.Span.Start - c2.Span.Start);
+         using var _ = ArrayBuilder<TextChange>.GetInstance(changes.Length, out var normalizedChanges);
+ 
+-        var currentChange = changes[0];
+-        foreach (var nextChange in changes.AsSpan()[1..])
++        var currentChange = orderedChanges[0];
++        foreach (var nextChange in orderedChanges.AsSpan()[1..])
+         {
+             if (nextChange.Span.Start == currentChange.Span.End)
+             {
+diff --git a/src/Workspaces/SharedUtilitiesAndExtensions/Compiler/Core/Extensions/TextSpanExtensions.cs b/src/Workspaces/SharedUtilitiesAndExtensions/Compiler/Core/Extensions/TextSpanExtensions.cs
+index 24f69233..7ad0fac7 100644
+--- a/src/Workspaces/SharedUtilitiesAndExtensions/Compiler/Core/Extensions/TextSpanExtensions.cs
++++ b/src/Workspaces/SharedUtilitiesAndExtensions/Compiler/Core/Extensions/TextSpanExtensions.cs
+@@ -19,7 +19,7 @@ public static IEnumerable<TextSpan> ToNormalizedSpans(this IEnumerable<TextSpan>
+         => new NormalizedTextSpanCollection(spans);
+ 
+     public static ImmutableArray<TextSpan> ToNormalizedSpans(this ImmutableArray<TextSpan> spans)
+-        => [.. spans];
++        => [.. new NormalizedTextSpanCollection(spans)];
+ 
+     public static TextSpan Collapse(this IEnumerable<TextSpan> spans)
+     {
+diff --git a/src/Workspaces/SharedUtilitiesAndExtensions/Compiler/Core/NamingStyles/NamingRule.cs b/src/Workspaces/SharedUtilitiesAndExtensions/Compiler/Core/NamingStyles/NamingRule.cs
+index 1db5c313..0ebd16ab 100644
+--- a/src/Workspaces/SharedUtilitiesAndExtensions/Compiler/Core/NamingStyles/NamingRule.cs
++++ b/src/Workspaces/SharedUtilitiesAndExtensions/Compiler/Core/NamingStyles/NamingRule.cs
+@@ -24,7 +24,7 @@ public bool Equals(NamingRule other)
+            EnforcementLevel == other.EnforcementLevel;
+ 
+     public override bool Equals([NotNullWhen(true)] object? obj)
+-        => obj is NamingStyle rule && Equals(rule);
++        => obj is NamingRule rule && Equals(rule);
+ 
+     public override int GetHashCode()
+         => Hash.Combine(SymbolSpecification.ID.GetHashCode(), Hash.Combine(NamingStyle.ID.GetHashCode(), (int)EnforcementLevel));
+diff --git a/src/Workspaces/SharedUtilitiesAndExtensions/Compiler/Core/Utilities/CommonFormattingHelpers.cs b/src/Workspaces/SharedUtilitiesAndExtensions/Compiler/Core/Utilities/CommonFormattingHelpers.cs
+index 04dd66c8..1e3a7682 100644
+--- a/src/Workspaces/SharedUtilitiesAndExtensions/Compiler/Core/Utilities/CommonFormattingHelpers.cs
++++ b/src/Workspaces/SharedUtilitiesAndExtensions/Compiler/Core/Utilities/CommonFormattingHelpers.cs
+@@ -310,7 +310,7 @@ public static int GetStartPositionOfSpan(SyntaxToken token)
+         Contract.ThrowIfNull(parentNode);
+         Contract.ThrowIfFalse(parentNode.FullSpan.Start < forwardPosition);
+ 
+-        previousToken = parentNode.FindToken(forwardPosition + 1);
++        previousToken = parentNode.FindToken(forwardPosition - 1);
+ 
+         Contract.ThrowIfTrue(previousToken.RawKind == 0);
+ 
+@@ -331,7 +331,7 @@ public static int GetStartPositionOfSpan(SyntaxToken token)
+             }
+             else
+             {
+-                if (position > fullSpan.End)
++                if (position < fullSpan.End)
+                 {
+                     return node;
+                 }

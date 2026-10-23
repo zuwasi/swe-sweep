@@ -1,0 +1,147 @@
+diff --git a/src/apply_vgridshift.cpp b/src/apply_vgridshift.cpp
+index daa44858..f10f619c 100644
+--- a/src/apply_vgridshift.cpp
++++ b/src/apply_vgridshift.cpp
+@@ -199,6 +199,8 @@ static double read_vgrid_value( PJ *defn, PJ_LP input, double vmultiplier, int *
+                 value /= total_weight;
+         }
+ 
++        if( value != HUGE_VAL )
++            break;
+     }
+ 
+     return value * vmultiplier;
+@@ -262,10 +264,8 @@ int pj_apply_vgridshift( PJ *defn, const char *listname,
+             z[io] += value;
+         if( value != HUGE_VAL )
+         {
+-            if( debug_count++ < 20 ) {
++            if( debug_count++ < 20 )
+                 proj_log_trace(defn, "pj_apply_gridshift(): used %s", ct.id);
+-                break;
+-            }
+         }
+ 
+         if( value == HUGE_VAL )
+diff --git a/src/apps/gie.cpp b/src/apps/gie.cpp
+index 6a67b55d..5356fe90 100644
+--- a/src/apps/gie.cpp
++++ b/src/apps/gie.cpp
+@@ -274,7 +274,7 @@ int main (int argc, char **argv) {
+ 
+     T.fout = stdout;
+     if (opt_given (o, "o"))
+-        T.fout = fopen (opt_arg (o, "output"), "rt");
++        T.fout = fopen (opt_arg (o, "output"), "wt");
+ 
+     if (nullptr==T.fout) {
+         fprintf (stderr, "%s: Cannot open '%s' for output\n", o->progname, opt_arg (o, "output"));
+@@ -417,7 +417,7 @@ static int process_file (const char *fname) {
+ 
+     T.grand_ok   += T.total_ok;
+     T.grand_ko   += T.total_ko;
+-    T.grand_skip += T.grand_skip;
++    T.grand_skip += T.total_skip;
+     if (T.verbosity > 0) {
+         fprintf (T.fout, "%stotal: %2d tests succeeded, %2d tests skipped, %2d tests %s\n",
+                  delim, T.total_ok, T.total_skip, T.total_ko,
+diff --git a/src/apps/projinfo.cpp b/src/apps/projinfo.cpp
+index c1139564..0c3f1795 100644
+--- a/src/apps/projinfo.cpp
++++ b/src/apps/projinfo.cpp
+@@ -868,7 +868,7 @@ int main(int argc, char **argv) {
+                           << std::endl;
+                 usage();
+             }
+-        } else if ((arg == "-s" || arg == "--ssource-crs") && i + 1 < argc) {
++        } else if ((arg == "-s" || arg == "--source-crs") && i + 1 < argc) {
+             i++;
+             sourceCRSStr = argv[i];
+         } else if ((arg == "-t" || arg == "--target-crs") && i + 1 < argc) {
+diff --git a/src/iso19111/coordinateoperation.cpp b/src/iso19111/coordinateoperation.cpp
+index aaa0c413..ed788a75 100644
+--- a/src/iso19111/coordinateoperation.cpp
++++ b/src/iso19111/coordinateoperation.cpp
+@@ -605,6 +605,7 @@ struct CoordinateOperation::Private {
+           interpolationCRS_(other.interpolationCRS_),
+           sourceCoordinateEpoch_(other.sourceCoordinateEpoch_),
+           targetCoordinateEpoch_(other.targetCoordinateEpoch_),
++          hasBallparkTransformation_(other.hasBallparkTransformation_),
+           strongRef_(other.strongRef_ ? internal::make_unique<CRSStrongRef>(
+                                             *(other.strongRef_))
+                                       : nullptr) {}
+@@ -8702,7 +8703,7 @@ TransformationNNPtr Transformation::substitutePROJAlternativeGridNames(
+     }
+ 
+     const auto &heightFilename = getHeightToGeographic3DFilename();
+-    if (!heightFilename.empty() && !projFilename.empty()) {
++    if (!heightFilename.empty()) {
+         if (databaseContext->lookForGridAlternative(
+                 heightFilename, projFilename, projGridFormat,
+                 inverseDirection)) {
+@@ -11093,7 +11094,7 @@ struct FilterResults {
+                     bool extentIntersectsExtent1 =
+                         !extent1 || extent->intersects(NN_NO_CHECK(extent1));
+                     bool extentIntersectsExtent2 =
+-                        extent2 && extent->intersects(NN_NO_CHECK(extent2));
++                        !extent2 || extent->intersects(NN_NO_CHECK(extent2));
+                     if (!extentIntersectsExtent1 || !extentIntersectsExtent2) {
+                         continue;
+                     }
+@@ -13903,7 +13904,7 @@ void CoordinateOperationFactory::Private::createOperationsVertToGeog(
+     double convDst = 1.0;
+     const auto &geogAxis = geogDst->coordinateSystem()->axisList();
+     bool dstIsUp = true;
+-    bool dstIsDown = true;
++    bool dstIsDown = false;
+     if (geogAxis.size() == 3) {
+         const auto &dstAxis = geogAxis[2];
+         convDst = dstAxis->unit().conversionToSI();
+diff --git a/src/iso19111/datum.cpp b/src/iso19111/datum.cpp
+index 255f9822..e4a25cc4 100644
+--- a/src/iso19111/datum.cpp
++++ b/src/iso19111/datum.cpp
+@@ -249,7 +249,7 @@ bool Datum::_isEquivalentTo(const util::IComparable *other,
+             return false;
+         }
+         if (conventionalRS() && otherDatum->conventionalRS() &&
+-            conventionalRS()->_isEquivalentTo(
++            !conventionalRS()->_isEquivalentTo(
+                 otherDatum->conventionalRS().get(), criterion, dbContext)) {
+             return false;
+         }
+@@ -1045,7 +1045,7 @@ bool Ellipsoid::_isEquivalentTo(const util::IComparable *other,
+         }
+ 
+     } else {
+-        if (!otherEllipsoid->computeSemiMinorAxis()._isEquivalentTo(
++        if (!computeSemiMinorAxis()._isEquivalentTo(
+                 otherEllipsoid->computeSemiMinorAxis(), criterion)) {
+             return false;
+         }
+diff --git a/src/iso19111/factory.cpp b/src/iso19111/factory.cpp
+index 0bd44308..08a3cd0d 100644
+--- a/src/iso19111/factory.cpp
++++ b/src/iso19111/factory.cpp
+@@ -5344,7 +5344,7 @@ AuthorityFactory::createObjectsFromName(
+                 break;
+             case ObjectType::GEOCENTRIC_CRS:
+                 addToListStringWithOR(otherConditions,
+-                                      "(table_name = " GEOCENTRIC_SINGLE_QUOTED
++                                      "(table_name = 'geodetic_crs'"
+                                       " AND "
+                                       "type = " GEOCENTRIC_SINGLE_QUOTED ")");
+                 break;
+diff --git a/src/pipeline.cpp b/src/pipeline.cpp
+index 96767143..09f0d0d4 100644
+--- a/src/pipeline.cpp
++++ b/src/pipeline.cpp
+@@ -221,7 +221,7 @@ static PJ_LPZ pipeline_reverse_3d (PJ_XYZ xyz, PJ *P) {
+         const auto& step = *iterStep;
+         if( !step.omit_inv )
+         {
+-            point = proj_trans (step.pj, PJ_INV, point);
++            point = pj_approx_3D_trans (step.pj, PJ_INV, point);
+         }
+     }
+ 

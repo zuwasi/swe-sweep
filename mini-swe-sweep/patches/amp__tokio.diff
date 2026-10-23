@@ -1,0 +1,58 @@
+diff --git a/tokio-stream/src/stream_map.rs b/tokio-stream/src/stream_map.rs
+index da021c79..342c9661 100644
+--- a/tokio-stream/src/stream_map.rs
++++ b/tokio-stream/src/stream_map.rs
+@@ -578,15 +578,15 @@ where
+     }
+ 
+     fn size_hint(&self) -> (usize, Option<usize>) {
+-        let mut ret = (0, Some(0));
++        let mut ret = (0usize, Some(0usize));
+ 
+         for (_, stream) in &self.entries {
+             let hint = stream.size_hint();
+ 
+-            ret.0 += hint.0;
++            ret.0 = ret.0.saturating_add(hint.0);
+ 
+             match (ret.1, hint.1) {
+-                (Some(a), Some(b)) => ret.1 = Some(a + b),
++                (Some(a), Some(b)) => ret.1 = a.checked_add(b),
+                 (Some(_), None) => ret.1 = None,
+                 _ => {}
+             }
+diff --git a/tokio-stream/tests/stream_stream_map.rs b/tokio-stream/tests/stream_stream_map.rs
+index b6b87e9d..cfa0f943 100644
+--- a/tokio-stream/tests/stream_stream_map.rs
++++ b/tokio-stream/tests/stream_stream_map.rs
+@@ -222,6 +222,17 @@ fn size_hint_without_upper() {
+     assert_eq!(size_hint, (3, None));
+ }
+ 
++#[test]
++fn size_hint_overflow() {
++    let mut map = StreamMap::new();
++
++    map.insert("a", stream::iter(0..usize::MAX));
++    map.insert("b", stream::iter(0..usize::MAX));
++
++    let size_hint = map.size_hint();
++    assert_eq!(size_hint, (usize::MAX, None));
++}
++
+ #[test]
+ fn new_capacity_zero() {
+     let map = StreamMap::<&str, stream::Pending<()>>::new();
+diff --git a/tokio/src/io/util/take.rs b/tokio/src/io/util/take.rs
+index df2f61b9..3b286151 100644
+--- a/tokio/src/io/util/take.rs
++++ b/tokio/src/io/util/take.rs
+@@ -85,7 +85,7 @@ impl<R: AsyncRead> AsyncRead for Take<R> {
+         }
+ 
+         let me = self.project();
+-        let mut b = buf.take(*me.limit_ as usize);
++        let mut b = buf.take(usize::try_from(*me.limit_).unwrap_or(usize::MAX));
+ 
+         let buf_ptr = b.filled().as_ptr();
+         ready!(me.inner.poll_read(cx, &mut b))?;

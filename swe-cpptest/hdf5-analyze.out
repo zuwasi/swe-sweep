@@ -1,0 +1,3 @@
+hdf5 [Recommended Rules]: Source Files to Check: 801, Violations Found: 2155
+hdf5 [Flow Analysis Standard]: Source Files to Check: 843, Violations Found: 2744
+hdf5 [Flow Analysis Aggressive]: Source Files to Check: 843, Violations Found: 3333

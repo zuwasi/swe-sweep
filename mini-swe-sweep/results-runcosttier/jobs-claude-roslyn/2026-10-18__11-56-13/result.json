@@ -1,0 +1,87 @@
+{
+    "id": "3e07887c-fa44-43d6-ae1b-5328206c9a5a",
+    "started_at": "2026-10-18T11:56:13.644722",
+    "updated_at": "2026-10-18T13:15:16.501519",
+    "finished_at": "2026-10-18T13:15:16.501519",
+    "n_total_trials": 1,
+    "stats": {
+        "n_completed_trials": 1,
+        "n_errored_trials": 0,
+        "n_running_trials": 0,
+        "n_pending_trials": 0,
+        "n_cancelled_trials": 0,
+        "n_retries": 0,
+        "evals": {
+            "swe-sweep-patch__adhoc": {
+                "n_trials": 1,
+                "n_errors": 0,
+                "metrics": [
+                    {
+                        "agent_build_ok": 1.0,
+                        "agent_patch_applied": 1.0,
+                        "grader_failed": 0.0,
+                        "n_partial": 0.0,
+                        "n_regressions": 22.0,
+                        "n_resolved": 0.0,
+                        "n_subtasks": 5.0,
+                        "reward": 0.0,
+                        "visible_ok": 0.0
+                    }
+                ],
+                "pass_at_k": {},
+                "reward_stats": {
+                    "reward": {
+                        "0.0": [
+                            "swe-sweep__roslyn__Vt6zwoY"
+                        ]
+                    },
+                    "n_subtasks": {
+                        "5.0": [
+                            "swe-sweep__roslyn__Vt6zwoY"
+                        ]
+                    },
+                    "n_resolved": {
+                        "0.0": [
+                            "swe-sweep__roslyn__Vt6zwoY"
+                        ]
+                    },
+                    "n_partial": {
+                        "0.0": [
+                            "swe-sweep__roslyn__Vt6zwoY"
+                        ]
+                    },
+                    "visible_ok": {
+                        "0.0": [
+                            "swe-sweep__roslyn__Vt6zwoY"
+                        ]
+                    },
+                    "n_regressions": {
+                        "22.0": [
+                            "swe-sweep__roslyn__Vt6zwoY"
+                        ]
+                    },
+                    "agent_patch_applied": {
+                        "1.0": [
+                            "swe-sweep__roslyn__Vt6zwoY"
+                        ]
+                    },
+                    "agent_build_ok": {
+                        "1.0": [
+                            "swe-sweep__roslyn__Vt6zwoY"
+                        ]
+                    },
+                    "grader_failed": {
+                        "0.0": [
+                            "swe-sweep__roslyn__Vt6zwoY"
+                        ]
+                    }
+                },
+                "exception_stats": {}
+            }
+        },
+        "n_input_tokens": null,
+        "n_cache_tokens": null,
+        "n_output_tokens": null,
+        "cost_usd": null
+    }
+}

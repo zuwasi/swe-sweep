@@ -1,0 +1,15 @@
+I fixed two bugs. After the fixes, the gson suite has the same 17 failures as before I started (1014 tests), and no new ones.
+
+Those 17 come from running on JDK 21, not from the code. Changed date formatting in the newer JDK breaks the date tests, and Java's module rules block the `Throwable` reflection tests. With the old-locale flag and module access opened (`-Djava.locale.providers=COMPAT --add-opens java.base/java.lang=ALL-UNNAMED`), all 1014 pass. Maven isn't installed, so I compiled with `javac` and ran JUnit directly.
+
+**Fixes**
+1. **`JsonWriter.value(double)`** (`gson/src/main/java/com/google/gson/stream/JsonWriter.java`): the `setLenient` javadoc says lenient mode allows NaN and infinities. This method threw on them anyway. It now throws only in strict mode, matching `value(Number)` and `JsonTreeWriter.value(double)`. Strict mode still throws, and the existing strict-mode tests still pass.
+2. **`JavaWriter.stringLiteral`** (`codegen/src/main/java/com/google/gson/codegen/JavaWriter.java`): it is documented to return a string literal for its input. For tab, backspace, newline, carriage return and form feed, it wrote a backslash followed by the raw character, which isn't valid Java. It now writes `\t`, `\b`, `\n`, `\r` and `\f`. No tests cover this module; I only checked that the file compiles.
+
+**Bugs I found but left alone, because fixing them breaks existing passing tests**
+- **`JsonPrimitive.equals`** compares whole numbers via their `long` value, so `BigInteger` 2^64+5 equals `5L`. I tried a fix, but `JsonPrimitiveTest.testEqualsIntegerAndBigInteger` asserts the current behavior, so I reverted it.
+- **Fields that point to their own object are skipped when writing** (`ReflectiveTypeAdapterFactory`). This makes the extras test `GraphAdapterBuilderTest.testSerializationDirectSelfReference` fail. That test was already failing before my changes, and `CircularReferenceTest.testSelfReferenceIgnoredInSerialization` requires the skip.
+- **`JsonArray.set(i, null)`** stores a raw `null` where the `add` methods store `JsonNull`. Tests assert this.
+- **`LinkedTreeMap.put(null, …)`** always throws, although its constructor doc suggests a comparator could allow null keys. Tests assert this.
+
+I reviewed the rest of the gson module plus extras, proto and codegen, and didn't find anything else that contradicts the docs. In extras, `PostConstructAdapterFactory` and its test couldn't be compiled because the `javax.annotation` jar isn't available here, so they weren't run.

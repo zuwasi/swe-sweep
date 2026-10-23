@@ -1,0 +1,24 @@
+# Cloned benchmark repositories and their build trees (large, reproducible)
+libexpat/
+libexpat-full/
+jerryscript/
+jerryscript-full/
+hdf5/
+proj/
+z3/
+tarantool/
+
+# C++test workspaces (per-run state)
+ws-*/
+
+# Generated reports (large HTML/XML bundles); summaries in *.out are kept
+report-*/
+run-*.log
+
+# Build data files are reproducible from compile_commands.json
+*.bdf
+cpptest.bdf
+
+# Scratch
+*.o
+*.tar.gz

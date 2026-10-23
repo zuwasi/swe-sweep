@@ -1,0 +1,34 @@
+diff --git a/src/black/linegen.py b/src/black/linegen.py
+index b6b83da..8bd19a6 100644
+--- a/src/black/linegen.py
++++ b/src/black/linegen.py
+@@ -1245,6 +1245,14 @@ def remove_await_parens(node: Node) -> None:
+                     ensure_visible(closing_bracket)
+                     # If we are in a nested await then recurse down.
+                     remove_await_parens(bracket_contents)
++                elif any(
++                    isinstance(child, Leaf) and child.type == token.DOUBLESTAR
++                    for child in bracket_contents.children
++                ):
++                    # `await` binds tighter than `**`: `await (a ** b)` differs
++                    # from `await a ** b`, so these brackets must stay.
++                    ensure_visible(opening_bracket)
++                    ensure_visible(closing_bracket)
+ 
+ 
+ def _maybe_wrap_cms_in_parens(
+diff --git a/src/black/nodes.py b/src/black/nodes.py
+index 4e9411b..0750ffa 100644
+--- a/src/black/nodes.py
++++ b/src/black/nodes.py
+@@ -349,6 +349,10 @@ def whitespace(leaf: Leaf, *, complex_subscript: bool) -> str:  # noqa: C901
+ 
+             return NO
+ 
++        elif t == token.COLON and prev.type == token.COLON:
++            # An omitted slice parameter between two colons, e.g. `ham[x + 1 ::]`.
++            return NO
++
+         elif not complex_subscript:
+             return NO
+ 

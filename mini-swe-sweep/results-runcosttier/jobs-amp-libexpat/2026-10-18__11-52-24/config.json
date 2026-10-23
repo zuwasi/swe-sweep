@@ -1,0 +1,19 @@
+{
+    "job_name": "2026-10-18__11-52-24",
+    "jobs_dir": "/home/danie/mini-swe-sweep/results/jobs-amp-libexpat",
+    "verifier_timeout_multiplier": 0.32432432432432434,
+    "n_concurrent_trials": 1,
+    "agents": [
+        {
+            "name": "swesweep.patch_agent:PatchAgent",
+            "kwargs": {
+                "patch_path": "/home/danie/mini-swe-sweep/patches/amp__libexpat.diff"
+            }
+        }
+    ],
+    "tasks": [
+        {
+            "path": "/tmp/swe-sweep-task-eqjyiet2/swe-sweep__libexpat"
+        }
+    ]
+}

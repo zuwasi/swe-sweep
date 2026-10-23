@@ -1,0 +1,41 @@
+{
+  "baseline_suite": null,
+  "post_suite": {
+    "command": "python -m pytest tests -p no:cacheprovider -o addopts= -q --continue-on-collection-errors --junitxml=/tmp/report.xml",
+    "returncode": 0,
+    "text": "........................................................................ [ 14%]\n......x................................................................. [ 28%]\n........................................................................ [ 42%]\n........................................................................ [ 56%]\n............................................sssssssssssssssssssss....... [ 70%]\n........................................................................ [ 84%]\n........................................................................ [ 98%]\n......                                                                   [100%]\n--------------------- generated xml file: /tmp/report.xml ----------------------\n488 passed, 21 skipped, 1 xfailed in 1.39s\n",
+    "truncated": false
+  },
+  "subtasks": {
+    "click-0099eb6f2003": {
+      "command": "python -m pytest tests/conftest.py tests/test_types.py -p no:cacheprovider -o addopts= -q --continue-on-collection-errors --junitxml=/tmp/report.xml -k test_path_type or test_symlink_resolution",
+      "returncode": 0,
+      "text": "......                                                                   [100%]\n--------------------- generated xml file: /tmp/report.xml ----------------------\n6 passed, 29 deselected in 0.04s\n",
+      "truncated": false
+    },
+    "click-4f1302f13075": {
+      "command": "python -m pytest tests/test_arguments.py -p no:cacheprovider -o addopts= -q --continue-on-collection-errors --junitxml=/tmp/report.xml -k test_nested_subcommand_help or test_when_argument_decorator_is_used_multiple_times_cls_is_preserved",
+      "returncode": 0,
+      "text": "..                                                                       [100%]\n--------------------- generated xml file: /tmp/report.xml ----------------------\n2 passed, 31 deselected in 0.03s\n",
+      "truncated": false
+    },
+    "click-6017fe42f482": {
+      "command": "python -m pytest tests/test_arguments.py -p no:cacheprovider -o addopts= -q --continue-on-collection-errors --junitxml=/tmp/report.xml -k test_envvar_flag_value or test_nargs_envvar",
+      "returncode": 1,
+      "text": "......F.                                                                 [100%]\n=================================== FAILURES ===================================\n____________________________ test_envvar_flag_value ____________________________\n\nrunner = <click.testing.CliRunner object at 0x7497d0d12b80>\n\n    def test_envvar_flag_value(runner):\n        @click.command()\n        # is_flag is implicitly true\n        @click.option(\"--upper\", flag_value=\"upper\", envvar=\"UPPER\")\n        def cmd(upper):\n            click.echo(upper)\n            return upper\n    \n        # For whatever value of the `env` variable, if it exists, the flag should be `upper`\n        result = runner.invoke(cmd, env={\"UPPER\": \"whatever\"})\n>       assert result.output.strip() == \"upper\"\nE       AssertionError: assert 'whatever' == 'upper'\nE         - upper\nE         + whatever\n\ntests/test_arguments.py:207: AssertionError\n--------------------- generated xml file: /tmp/report.xml ----------------------\n=========================== short test summary info ============================\nFAILED tests/test_arguments.py::test_envvar_flag_value - AssertionError: asse...\n1 failed, 7 passed, 25 deselected in 0.07s\n",
+      "truncated": false
+    },
+    "click-679517d3ee49": {
+      "command": "python -m pytest tests/test_options.py -p no:cacheprovider -o addopts= -q --continue-on-collection-errors --junitxml=/tmp/report.xml -k test_multiple_option_with_optional_value or test_option_with_optional_value",
+      "returncode": 1,
+      "text": "..............F                                                          [100%]\n=================================== FAILURES ===================================\n___________________ test_multiple_option_with_optional_value ___________________\n\nrunner = <click.testing.CliRunner object at 0x70ec31f07b80>\n\n    def test_multiple_option_with_optional_value(runner):\n        cli = click.Command(\n            \"cli\",\n            params=[\n                click.Option([\"-f\"], is_flag=False, flag_value=\"flag\", multiple=True),\n                click.Option([\"-a\"]),\n                click.Argument([\"b\"], nargs=-1),\n            ],\n            callback=lambda **kwargs: kwargs,\n        )\n        result = runner.invoke(\n            cli,\n            [\"-f\", \"-f\", \"other\", \"-f\", \"-a\", \"1\", \"a\", \"b\"],\n            standalone_mode=False,\n            catch_exceptions=False,\n        )\n>       assert result.return_value == {\n            \"f\": (\"flag\", \"other\", \"flag\"),\n            \"a\": \"1\",\n            \"b\": (\"a\", \"b\"),\n        }\nE       AssertionError: assert {'a': '1', 'b...ec32c93520>')} == {'a': '1', 'b...her', 'flag')}\nE         Omitting 2 identical items, use -vv to show\nE         Differing items:\nE         {'f': ('<object object at 0x70ec32c93520>', 'other', '<object object at 0x70ec32c93520>')} != {'f': ('flag', 'other', 'flag')}\nE         Full diff:\nE           {\nE            'a': '1',\nE            'b': ('a',...\nE         \nE         ...Full output truncated (8 lines hidden), use '-vv' to show\n\ntests/test_options.py:777: AssertionError\n--------------------- generated xml file: /tmp/report.xml ----------------------\n=========================== short test summary info ============================\nFAILED tests/test_options.py::test_multiple_option_with_optional_value - Asse...\n1 failed, 14 passed, 69 deselected in 0.12s\n",
+      "truncated": false
+    },
+    "click-747fcbb3e083": {
+      "command": "python -m pytest tests/test_shell_completion.py -p no:cacheprovider -o addopts= -q --continue-on-collection-errors --junitxml=/tmp/report.xml -k test_flag_option_with_nargs_option or test_option_flag",
+      "returncode": 1,
+      "text": ".F                                                                       [100%]\n=================================== FAILURES ===================================\n______________________ test_flag_option_with_nargs_option ______________________\n\n    def test_flag_option_with_nargs_option():\n        cli = Command(\n            \"cli\",\n            add_help_option=False,\n            params=[\n                Argument([\"a\"], type=Choice([\"a1\", \"a2\", \"b\"])),\n                Option([\"--flag\"], is_flag=True),\n                Option([\"-c\"], type=Choice([\"p\", \"q\"]), nargs=2),\n            ],\n        )\n>       assert _get_words(cli, [\"a1\", \"--flag\", \"-c\"], \"\") == [\"p\", \"q\"]\nE       AssertionError: assert ['a1', 'a2', 'b'] == ['p', 'q']\nE         At index 0 diff: 'a1' != 'p'\nE         Left contains one more item: 'b'\nE         Full diff:\nE         - ['p', 'q']\nE         + ['a1', 'a2', 'b']\n\ntests/test_shell_completion.py:152: AssertionError\n--------------------- generated xml file: /tmp/report.xml ----------------------\n=========================== short test summary info ============================\nFAILED tests/test_shell_completion.py::test_flag_option_with_nargs_option - A...\n1 failed, 1 passed, 32 deselected in 0.06s\n",
+      "truncated": false
+    }
+  }
+}

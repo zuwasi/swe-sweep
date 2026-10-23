@@ -1,0 +1,6 @@
+Skipping image OS validation for hb__9ade16374159a96bffd9c7cd12cdaa2b: docker inspect returned 1
+Collecting main service artifacts
+Running collect hook in service 'main': 'mkdir -p /logs/artifacts && cd /roslyn && git add -A && git diff --cached --binary baseline > /logs/artifacts/model.patch'
+Collect hook in service 'main' completed
+Artifact collision: source '/logs/artifacts/model.patch' (service 'main') maps to host path /home/danie/mini-swe-sweep/results/jobs-claude-roslyn/2026-10-18__11-56-13/swe-sweep__roslyn__Vt6zwoY/artifacts/logs/artifacts/model.patch, which overlaps content already claimed by source '/logs/artifacts'; keeping the first and skipping this one.
+Skipping image OS validation for hb__c2d24c4ba2e36b3e4a23e7c75e674ebd: docker inspect returned 1

@@ -1,0 +1,30 @@
+diff --git a/src/click/core.py b/src/click/core.py
+index e2ccf59..cf82aab 100644
+--- a/src/click/core.py
++++ b/src/click/core.py
+@@ -2760,7 +2760,7 @@ class Option(Parameter):
+             extra.append(_("required"))
+ 
+         if extra:
+-            extra_str = ";".join(extra)
++            extra_str = "; ".join(extra)
+             help = f"{help}  [{extra_str}]" if help else f"[{extra_str}]"
+ 
+         return ("; " if any_prefix_is_slash else " / ").join(rv), help
+diff --git a/src/click/shell_completion.py b/src/click/shell_completion.py
+index 706fb69..500d8d7 100644
+--- a/src/click/shell_completion.py
++++ b/src/click/shell_completion.py
+@@ -102,10 +102,10 @@ _SOURCE_BASH = """\
+         IFS=',' read type value <<< "$completion"
+ 
+         if [[ $type == 'dir' ]]; then
+-            COMREPLY=()
++            COMPREPLY=()
+             compopt -o dirnames
+         elif [[ $type == 'file' ]]; then
+-            COMREPLY=()
++            COMPREPLY=()
+             compopt -o default
+         elif [[ $type == 'plain' ]]; then
+             COMPREPLY+=($value)

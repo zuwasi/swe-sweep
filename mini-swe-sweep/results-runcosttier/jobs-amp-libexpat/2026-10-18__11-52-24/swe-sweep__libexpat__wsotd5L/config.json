@@ -1,0 +1,15 @@
+{
+    "task": {
+        "path": "/tmp/swe-sweep-task-eqjyiet2/swe-sweep__libexpat"
+    },
+    "trial_name": "swe-sweep__libexpat__wsotd5L",
+    "trials_dir": "/home/danie/mini-swe-sweep/results/jobs-amp-libexpat/2026-10-18__11-52-24",
+    "verifier_timeout_multiplier": 0.32432432432432434,
+    "agent": {
+        "name": "swesweep.patch_agent:PatchAgent",
+        "kwargs": {
+            "patch_path": "/home/danie/mini-swe-sweep/patches/amp__libexpat.diff"
+        }
+    },
+    "job_id": "ff8569b7-6dca-4db6-ba8a-c7b240277303"
+}

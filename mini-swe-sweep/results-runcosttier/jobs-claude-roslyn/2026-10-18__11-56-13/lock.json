@@ -1,0 +1,68 @@
+{
+    "schema_version": 3,
+    "created_at": "2026-10-18T08:56:13.667184Z",
+    "harbor": {
+        "version": "0.23.0",
+        "git_commit_hash": "58789aad577f432a4590209a8fd901f8c894f382",
+        "is_editable": false
+    },
+    "n_concurrent_trials": 1,
+    "retry": {
+        "max_retries": 0,
+        "exclude_exceptions": [
+            "VerifierOutputParseError",
+            "AgentAuthenticationError",
+            "ModelNotFoundError",
+            "ApiUsageLimitError",
+            "RewardFileEmptyError",
+            "AgentTimeoutError",
+            "VerifierTimeoutError",
+            "RewardFileNotFoundError",
+            "AgentSafetyRefusalError"
+        ],
+        "wait_multiplier": 1.0,
+        "min_wait_sec": 1.0,
+        "max_wait_sec": 60.0
+    },
+    "trials": [
+        {
+            "schema_version": 2,
+            "task": {
+                "name": "swe-sweep__roslyn",
+                "type": "local",
+                "digest": "sha256:bcd46124fbeece2c02c5b33132d7657b7ddd43720729c5a54f07cb42954e6993",
+                "path": "/tmp/swe-sweep-task-jaav_emw/swe-sweep__roslyn"
+            },
+            "install_only": false,
+            "timeout_multiplier": 1.0,
+            "verifier_timeout_multiplier": 0.16666666666666666,
+            "agent": {
+                "name": "swesweep.patch_agent:PatchAgent",
+                "skills": [],
+                "resume_trajectory": false,
+                "extra_allowed_hosts": [],
+                "kwargs": {
+                    "patch_path": "/home/danie/mini-swe-sweep/patches/claude__roslyn.diff"
+                },
+                "mcp_servers": []
+            },
+            "bridge_inputs": {},
+            "skills": [],
+            "environment": {
+                "type": "docker",
+                "force_build": false,
+                "delete": true,
+                "stream": false,
+                "cpu_enforcement_policy": "auto",
+                "memory_enforcement_policy": "auto",
+                "extra_docker_compose": [],
+                "kwargs": {},
+                "extra_allowed_hosts": []
+            },
+            "verifier": {
+                "disable": false,
+                "environment_mode": "separate"
+            }
+        }
+    ]
+}

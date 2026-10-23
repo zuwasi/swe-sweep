@@ -1,0 +1,19 @@
+{
+    "job_name": "2026-10-18__11-53-26",
+    "jobs_dir": "/home/danie/mini-swe-sweep/results/jobs-amp-click",
+    "verifier_timeout_multiplier": 0.4067796610169492,
+    "n_concurrent_trials": 1,
+    "agents": [
+        {
+            "name": "swesweep.patch_agent:PatchAgent",
+            "kwargs": {
+                "patch_path": "/home/danie/mini-swe-sweep/patches/amp__click.diff"
+            }
+        }
+    ],
+    "tasks": [
+        {
+            "path": "/tmp/swe-sweep-task-2tkot0zc/swe-sweep__click"
+        }
+    ]
+}

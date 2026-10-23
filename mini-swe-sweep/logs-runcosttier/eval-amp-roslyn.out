@@ -1,0 +1,42 @@
+warning: `VIRTUAL_ENV=/home/danie/.zephyr-venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+/mnt/c/Users/danie/amp-demos/swe-sweep/.venv/lib/python3.12/site-packages/harbor/models/task/config.py:861: UserWarning: Artifact sources overlap: '/logs/artifacts' (service 'main') and '/logs/artifacts/model.patch' (service 'main') map to the same location under the shared artifacts dir; on collision the first is kept and the rest are skipped at collection time.
+  validate_artifact_entries(
+/mnt/c/Users/danie/amp-demos/swe-sweep/.venv/lib/python3.12/site-packages/harbor/models/task/config.py:861: UserWarning: Artifact sources overlap: '/logs/artifacts' (service 'main') and '/logs/artifacts/model.patch' (service 'main') map to the same location under the shared artifacts dir; on collision the first is kept and the rest are skipped at collection time.
+  validate_artifact_entries(
+/mnt/c/Users/danie/amp-demos/swe-sweep/.venv/lib/python3.12/site-packages/harbor/trial/trial.py:1368: UserWarning: Artifact sources overlap: '/logs/artifacts' (service 'main') and '/logs/artifacts/model.patch' (service 'main') map to the same location under the shared artifacts dir; on collision the first is kept and the rest are skipped at collection time.
+  validate_artifact_entries(base_entries, convention_source=convention_source)
+Artifact collision: source '/logs/artifacts/model.patch' (service 'main') maps to host path /home/danie/mini-swe-sweep/results/jobs-amp-roslyn/2026-10-18__11-55-41/swe-sweep__roslyn__xDtWU6y/artifacts/logs/artifacts/model.patch, which overlaps content already claimed by source '/logs/artifacts'; keeping the first and skipping this one.
+  1/1 Agent_Build_Ok: 1.000 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1:20:25 0:00:00
+/mnt/c/Users/danie/amp-demos/swe-sweep/.venv/lib/python3.12/site-packages/harbor/models/task/config.py:861: UserWarning: Artifact sources overlap: '/logs/artifacts' (service 'main') and '/logs/artifacts/model.patch' (service 'main') map to the same location under the shared artifacts dir; on collision the first is kept and the rest are skipped at collection time.
+  validate_artifact_entries(
+adhoc • swe-sweep-patch
+┏━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━━┳━━━━━━┳━━━━━━━┓
+┃ Tri… ┃ Exc… ┃ Age… ┃ Age… ┃ Gra… ┃ N_P… ┃ N_R… ┃ N_R… ┃ N_Su… ┃ Rew… ┃ Visi… ┃
+┡━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━━╇━━━━━━╇━━━━━━━┩
+│    1 │    0 │ 1.0… │ 1.0… │ 0.0… │ 0.0… │ 0.0… │ 0.0… │ 5.000 │ 0.0… │ 1.000 │
+└──────┴──────┴──────┴──────┴──────┴──────┴──────┴──────┴───────┴──────┴───────┘
+
+┏━━━━━━━━┳━━━━━━━┓
+┃ Reward ┃ Count ┃
+┡━━━━━━━━╇━━━━━━━┩
+│ 0.0    │     1 │
+│ 5.0    │     1 │
+│ 0.0    │     1 │
+│ 0.0    │     1 │
+│ 1.0    │     1 │
+│ 0.0    │     1 │
+│ 1.0    │     1 │
+│ 1.0    │     1 │
+│ 0.0    │     1 │
+└────────┴───────┘
+
+Job Info
+Total runtime: 1h 17m 42s
+Results written to 
+/home/danie/mini-swe-sweep/results/jobs-amp-roslyn/2026-10-18__11-55-41/result.j
+son
+Inspect results by running `harbor view 
+/home/danie/mini-swe-sweep/results/jobs-amp-roslyn`
+Share results by running `harbor upload 
+/home/danie/mini-swe-sweep/results/jobs-amp-roslyn/2026-10-18__11-55-41`
+

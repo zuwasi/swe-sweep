@@ -1,0 +1,13 @@
+diff --git a/src/black/lines.py b/src/black/lines.py
+index bf4c12c..79fdf79 100644
+--- a/src/black/lines.py
++++ b/src/black/lines.py
+@@ -873,6 +873,8 @@ def can_be_split(line: Line) -> bool:
+             if dot_count > 1 and call_count > 1:
+                 return False
+ 
++            next = leaf
++
+     return True
+ 
+ 

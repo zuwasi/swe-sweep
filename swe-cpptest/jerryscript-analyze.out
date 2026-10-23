@@ -1,0 +1,3 @@
+jerryscript [Recommended Rules]: Source Files to Check: 457, Violations Found: 333
+jerryscript [Flow Analysis Standard]: Source Files to Check: 457, Violations Found: 297
+jerryscript [Flow Analysis Aggressive]: Source Files to Check: 457, Violations Found: 446

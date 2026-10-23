@@ -1,0 +1,87 @@
+{
+    "id": "fb5b5084-1530-4414-8168-ad0639cbaa84",
+    "started_at": "2026-10-18T11:53:27.768297",
+    "updated_at": "2026-10-18T11:55:27.790782",
+    "finished_at": "2026-10-18T11:55:27.790782",
+    "n_total_trials": 1,
+    "stats": {
+        "n_completed_trials": 1,
+        "n_errored_trials": 0,
+        "n_running_trials": 0,
+        "n_pending_trials": 0,
+        "n_cancelled_trials": 0,
+        "n_retries": 0,
+        "evals": {
+            "swe-sweep-patch__adhoc": {
+                "n_trials": 1,
+                "n_errors": 0,
+                "metrics": [
+                    {
+                        "agent_build_ok": 1.0,
+                        "agent_patch_applied": 1.0,
+                        "grader_failed": 0.0,
+                        "n_partial": 0.0,
+                        "n_regressions": 0.0,
+                        "n_resolved": 0.0,
+                        "n_subtasks": 5.0,
+                        "reward": 0.0,
+                        "visible_ok": 1.0
+                    }
+                ],
+                "pass_at_k": {},
+                "reward_stats": {
+                    "reward": {
+                        "0.0": [
+                            "swe-sweep__click__vXNUZ62"
+                        ]
+                    },
+                    "n_subtasks": {
+                        "5.0": [
+                            "swe-sweep__click__vXNUZ62"
+                        ]
+                    },
+                    "n_resolved": {
+                        "0.0": [
+                            "swe-sweep__click__vXNUZ62"
+                        ]
+                    },
+                    "n_partial": {
+                        "0.0": [
+                            "swe-sweep__click__vXNUZ62"
+                        ]
+                    },
+                    "visible_ok": {
+                        "1.0": [
+                            "swe-sweep__click__vXNUZ62"
+                        ]
+                    },
+                    "n_regressions": {
+                        "0.0": [
+                            "swe-sweep__click__vXNUZ62"
+                        ]
+                    },
+                    "agent_patch_applied": {
+                        "1.0": [
+                            "swe-sweep__click__vXNUZ62"
+                        ]
+                    },
+                    "agent_build_ok": {
+                        "1.0": [
+                            "swe-sweep__click__vXNUZ62"
+                        ]
+                    },
+                    "grader_failed": {
+                        "0.0": [
+                            "swe-sweep__click__vXNUZ62"
+                        ]
+                    }
+                },
+                "exception_stats": {}
+            }
+        },
+        "n_input_tokens": null,
+        "n_cache_tokens": null,
+        "n_output_tokens": null,
+        "cost_usd": null
+    }
+}

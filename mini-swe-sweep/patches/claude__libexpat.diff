@@ -1,0 +1,15 @@
+diff --git a/expat/xmlwf/xmlwf.c b/expat/xmlwf/xmlwf.c
+index 29118bb..0c4e4ce 100644
+--- a/expat/xmlwf/xmlwf.c
++++ b/expat/xmlwf/xmlwf.c
+@@ -1175,8 +1175,9 @@ tmain(int argc, XML_Char **argv) {
+       if (! userData.fp) {
+         tperror(outName);
+         exitCode = XMLWF_EXIT_OUTPUT_ERROR;
++        free(outName);
++        XML_ParserFree(parser);
+         if (continueOnError) {
+-          free(outName);
+           cleanupUserData(&userData);
+           continue;
+         } else {

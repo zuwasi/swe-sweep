@@ -1,0 +1,57 @@
+diff --git a/src/Compiler/Service/ServiceLexing.fs b/src/Compiler/Service/ServiceLexing.fs
+index 14f5744a0..15ae8f672 100644
+--- a/src/Compiler/Service/ServiceLexing.fs
++++ b/src/Compiler/Service/ServiceLexing.fs
+@@ -1657,7 +1657,7 @@ type FSharpToken =
+         | UINT32 _ -> FSharpTokenKind.UInt32
+         | UINT16 _ -> FSharpTokenKind.UInt16
+         | UINT8 _ -> FSharpTokenKind.UInt8
+-        | INT64 _ -> FSharpTokenKind.UInt64
++        | INT64 _ -> FSharpTokenKind.Int64
+         | INT32 _ -> FSharpTokenKind.Int32
+         | INT32_DOT_DOT _ -> FSharpTokenKind.Int32DotDot
+         | INT16 _ -> FSharpTokenKind.Int16
+diff --git a/src/Compiler/TypedTree/TypedTreeOps.fs b/src/Compiler/TypedTree/TypedTreeOps.fs
+index 685f9a737..6b0d0602e 100644
+--- a/src/Compiler/TypedTree/TypedTreeOps.fs
++++ b/src/Compiler/TypedTree/TypedTreeOps.fs
+@@ -10525,7 +10525,7 @@ let (|EmptyRange|_|) (start, step, finish) =
+         start <= 0xffffffffUL
+         && step <= 0xffffffffUL
+         && finish <= 0xffffffffUL
+-        && finish <= start
++        && finish < start
+         ->
+         ValueSome EmptyRange
+ 
+diff --git a/src/FSharp.Core/prim-types.fs b/src/FSharp.Core/prim-types.fs
+index b5bcc6c28..92b6c464a 100644
+--- a/src/FSharp.Core/prim-types.fs
++++ b/src/FSharp.Core/prim-types.fs
+@@ -599,7 +599,7 @@ namespace Microsoft.FSharp.Core
+                         set codes i (get codes index)
+                         num <- i
+                     else
+-                        set codes i (combineTupleHashes (get codes index) (get codes num))
++                        set codes i (combineTupleHashes (get codes index) (get codes num'))
+                         if num' = num then
+                             num <- i
+                     i <- i + 1
+@@ -2849,7 +2849,7 @@ namespace Microsoft.FSharp.Core
+             elif type3eq<'T1, 'T2, 'U, uint16> then convPrim<_,'U> (# "conv.u2" (# "sub" (convPrim<_,uint16> x) (convPrim<_,uint16> y) : uint32 #) : uint16 #)
+             elif type3eq<'T1, 'T2, 'U, sbyte> then convPrim<_,'U> (# "conv.i1" (# "sub" (convPrim<_,sbyte> x) (convPrim<_,sbyte> y) : int32 #) : sbyte #)
+             elif type3eq<'T1, 'T2, 'U, byte> then convPrim<_,'U> (# "conv.u1" (# "sub" (convPrim<_,byte> x) (convPrim<_,byte> y) : uint32 #) : byte #)
+-            elif type3eq<'T1, 'T2, 'U, char> then convPrim<_,'U> (# "conv.u1" (# "sub" (convPrim<_,char> x) (convPrim<_,char> y) : uint32 #) : char #)
++            elif type3eq<'T1, 'T2, 'U, char> then convPrim<_,'U> (# "conv.u2" (# "sub" (convPrim<_,char> x) (convPrim<_,char> y) : uint32 #) : char #)
+             elif type3eq<'T1, 'T2, 'U, decimal> then convPrim<_,'U> (Decimal.op_Subtraction(convPrim<_,decimal> x, convPrim<_,decimal> y))
+             else BinaryOpDynamicImplTable<OpSubtractionInfo, 'T1, 'T2, 'U>.Invoke "op_Subtraction" x y
+ 
+@@ -6336,7 +6336,7 @@ namespace Microsoft.FSharp.Core
+                 let dst = zeroCreate (if len < 0 then 0 else len)
+                 let getArrayElem = 
+                     match nonFixedDim with
+-                    | 2 -> (fun i -> GetArray3D source index1 index2 i)
++                    | 2 -> (fun i -> GetArray3D source index1 index2 (start + i))
+                     | 1 -> (fun i -> GetArray3D source index1 (start + i) index2)
+                     | 0 -> (fun i -> GetArray3D source (start+i) index1 index2)
+                     | _ -> raise (IndexOutOfRangeException())

@@ -1,0 +1,1006 @@
+diff --git a/src/api/api_ast.cpp b/src/api/api_ast.cpp
+index ded8b7089..b1dea1d3f 100644
+--- a/src/api/api_ast.cpp
++++ b/src/api/api_ast.cpp
+@@ -1326,6 +1326,7 @@ extern "C" {
+             case OP_SEQ_NTH: return Z3_OP_SEQ_NTH;
+             case OP_SEQ_LENGTH: return Z3_OP_SEQ_LENGTH;
+             case OP_SEQ_INDEX: return Z3_OP_SEQ_INDEX;
++            case OP_SEQ_LAST_INDEX: return Z3_OP_SEQ_LAST_INDEX;
+             case OP_SEQ_TO_RE: return Z3_OP_SEQ_TO_RE;
+             case OP_SEQ_IN_RE: return Z3_OP_SEQ_IN_RE;
+             case OP_SEQ_MAP: return Z3_OP_SEQ_MAP;
+diff --git a/src/api/api_tactic.cpp b/src/api/api_tactic.cpp
+index e0038d8b7..b0e9f82f5 100644
+--- a/src/api/api_tactic.cpp
++++ b/src/api/api_tactic.cpp
+@@ -516,7 +516,7 @@ extern "C" {
+         Z3_TRY;
+         LOG_Z3_apply_result_get_subgoal(c, r, i);
+         RESET_ERROR_CODE();
+-        if (i > to_apply_result(r)->m_subgoals.size()) {
++        if (i >= to_apply_result(r)->m_subgoals.size()) {
+             SET_ERROR_CODE(Z3_IOB, nullptr);
+             RETURN_Z3(nullptr);
+         }
+diff --git a/src/api/python/z3/z3.py b/src/api/python/z3/z3.py
+index f859ab961..ae1c81378 100644
+--- a/src/api/python/z3/z3.py
++++ b/src/api/python/z3/z3.py
+@@ -5726,7 +5726,7 @@ class ParamDescrsRef:
+         Z3_param_descrs_inc_ref(self.ctx.ref(), self.descr)
+ 
+     def __deepcopy__(self, memo={}):
+-        return ParamsDescrsRef(self.descr, self.ctx)
++        return ParamDescrsRef(self.descr, self.ctx)
+ 
+     def __del__(self):
+         if self.ctx.ref() is not None and Z3_param_descrs_dec_ref is not None:
+@@ -7778,7 +7778,7 @@ class Fixedpoint(Z3PPObject):
+         self.vars = []
+ 
+     def __deepcopy__(self, memo={}):
+-        return FixedPoint(self.fixedpoint, self.ctx)
++        return Fixedpoint(self.fixedpoint, self.ctx)
+ 
+     def __del__(self):
+         if self.fixedpoint is not None and self.ctx.ref() is not None and Z3_fixedpoint_dec_ref is not None:
+@@ -7886,7 +7886,7 @@ class Fixedpoint(Z3PPObject):
+         """
+         query = _get_args(query)
+         sz = len(query)
+-        if sz >= 1 and isinstance(query[0], FuncDecl):
++        if sz >= 1 and isinstance(query[0], FuncDeclRef):
+             _z3_assert(False, "unsupported")
+         else:
+             if sz == 1:
+@@ -9719,7 +9719,7 @@ def set_default_rounding_mode(rm, ctx=None):
+     if is_fprm_value(rm):
+         _dflt_rounding_mode = rm.kind()
+     else:
+-        _z3_assert(_dflt_rounding_mode in _ROUNDING_MODES, "illegal rounding mode")
++        _z3_assert(rm in _ROUNDING_MODES, "illegal rounding mode")
+         _dflt_rounding_mode = rm
+ 
+ 
+@@ -9759,7 +9759,7 @@ def _coerce_fp_expr_list(alist, ctx):
+     r = []
+     for i in range(len(alist)):
+         a = alist[i]
+-        is_repr = isinstance(a, str) and a.contains("2**(") and a.endswith(")")
++        is_repr = isinstance(a, str) and "2**(" in a and a.endswith(")")
+         if is_repr or _is_int(a) or isinstance(a, (float, bool)):
+             r.append(FPVal(a, None, first_fp_sort, ctx))
+         else:
+@@ -11614,7 +11614,7 @@ def ReSort(s):
+         return ReSortRef(Z3_mk_re_sort(s.ctx.ref(), s.ast), s.ctx)
+     if s is None or isinstance(s, Context):
+         ctx = _get_ctx(s)
+-        return ReSortRef(Z3_mk_re_sort(ctx.ref(), Z3_mk_string_sort(ctx.ref())), s.ctx)
++        return ReSortRef(Z3_mk_re_sort(ctx.ref(), Z3_mk_string_sort(ctx.ref())), ctx)
+     raise Z3Exception("Regular expression sort constructor expects either a string or a context or no argument")
+ 
+ 
+diff --git a/src/api/python/z3/z3util.py b/src/api/python/z3/z3util.py
+index 993abef58..6b6b9763f 100644
+--- a/src/api/python/z3/z3util.py
++++ b/src/api/python/z3/z3util.py
+@@ -494,7 +494,7 @@ def model_str(m, as_str=True):
+ 
+     if m:
+         vs = [(v, m[v]) for v in m]
+-        vs = sorted(vs, key=lambda a, _: str(a))
++        vs = sorted(vs, key=lambda a: str(a))
+         if as_str:
+             return "\n".join(["{} = {}".format(k, v) for (k, v) in vs])
+         else:
+diff --git a/src/ast/ast.cpp b/src/ast/ast.cpp
+index 1583fb4ec..98ca1cbb0 100644
+--- a/src/ast/ast.cpp
++++ b/src/ast/ast.cpp
+@@ -2755,7 +2755,7 @@ proof * ast_manager::mk_proof(family_id fid, decl_kind k, expr * arg1, expr * ar
+ 
+ proof * ast_manager::mk_proof(family_id fid, decl_kind k, expr * arg1, expr * arg2, expr * arg3) {
+     expr * args[3] = { arg1, arg2, arg3 };
+-    return mk_proof(fid, k, 2, args);
++    return mk_proof(fid, k, 3, args);
+ }
+ 
+ proof * ast_manager::mk_true_proof() {
+diff --git a/src/ast/converters/expr_inverter.cpp b/src/ast/converters/expr_inverter.cpp
+index bc4a279c7..0bcc0abe6 100644
+--- a/src/ast/converters/expr_inverter.cpp
++++ b/src/ast/converters/expr_inverter.cpp
+@@ -865,7 +865,7 @@ public:
+             if (uncnstr(args[0])) {
+                 // x contains y -> r or y is empty
+                 mk_fresh_uncnstr_var_for(f, r);
+-                expr_ref emp(seq.str.mk_is_empty(args[0]), m);
++                expr_ref emp(seq.str.mk_is_empty(args[1]), m);
+                 if (m_mc)
+                     add_def(args[0], m.mk_ite(r, args[1], seq.str.mk_empty(args[0]->get_sort())));
+                 r = m.mk_or(r, emp);
+diff --git a/src/ast/euf/euf_ac_plugin.cpp b/src/ast/euf/euf_ac_plugin.cpp
+index 89d25b154..bf86d64ca 100644
+--- a/src/ast/euf/euf_ac_plugin.cpp
++++ b/src/ast/euf/euf_ac_plugin.cpp
+@@ -1153,7 +1153,7 @@ namespace euf {
+         auto& dst = m_active[dst_eq];
+ 
+         unsigned max_left = std::max(monomial(src.l).size(), monomial(dst.l).size());
+-        unsigned min_right = std::max(monomial(src.r).size(), monomial(dst.r).size());
++        unsigned min_right = std::min(monomial(src.r).size(), monomial(dst.r).size());
+ 
+ 
+         // AB -> C, AD -> E => BE ~ CD
+diff --git a/src/ast/euf/euf_bv_plugin.cpp b/src/ast/euf/euf_bv_plugin.cpp
+index 6b90bfd3a..06ba7ab41 100644
+--- a/src/ast/euf/euf_bv_plugin.cpp
++++ b/src/ast/euf/euf_bv_plugin.cpp
+@@ -320,7 +320,7 @@ namespace euf {
+                         ensure_slice(n, lo, hi);                    
+                 }
+                 else if (hi < ub)
+-                    split(r, ub - hi);
++                    split(r, hi - lb + 1);
+                 break;
+             }
+             auto cut = i.cut;
+diff --git a/src/ast/euf/euf_egraph.cpp b/src/ast/euf/euf_egraph.cpp
+index 7240d60e8..0012e6521 100644
+--- a/src/ast/euf/euf_egraph.cpp
++++ b/src/ast/euf/euf_egraph.cpp
+@@ -1008,7 +1008,7 @@ namespace euf {
+             enode* n1 = src.m_nodes[i];
+             enode* n1t = n1->m_target;      
+             enode* n2 = m_nodes[i];
+-            enode* n2t = n1t ? old_expr2new_enode[n1->get_expr_id()] : nullptr;
++            enode* n2t = n1t ? old_expr2new_enode[n1t->get_expr_id()] : nullptr;
+             SASSERT(!n1t || n2t);
+             SASSERT(!n1t || n1->get_sort() == n1t->get_sort());
+             SASSERT(!n1t || n2->get_sort() == n2t->get_sort());
+diff --git a/src/ast/fpa/fpa2bv_converter.cpp b/src/ast/fpa/fpa2bv_converter.cpp
+index 288bcab4e..a5d31ce36 100644
+--- a/src/ast/fpa/fpa2bv_converter.cpp
++++ b/src/ast/fpa/fpa2bv_converter.cpp
+@@ -3100,7 +3100,7 @@ void fpa2bv_converter::mk_to_fp_signed(func_decl * f, unsigned num, expr * const
+ 
+     TRACE(fpa2bv_to_fp_signed, tout << "exp worst case sz: " << exp_worst_case_sz << std::endl;);
+ 
+-    if (exp_sz <= exp_worst_case_sz) {
++    if (exp_sz < exp_worst_case_sz) {
+         // exp_sz < exp_worst_case_sz and exp >= 0.
+         // Take the maximum legal exponent; this
+         // allows us to keep the most precision.
+diff --git a/src/ast/fpa_decl_plugin.cpp b/src/ast/fpa_decl_plugin.cpp
+index e255f4b10..8ab142bc1 100644
+--- a/src/ast/fpa_decl_plugin.cpp
++++ b/src/ast/fpa_decl_plugin.cpp
+@@ -529,7 +529,7 @@ func_decl * fpa_decl_plugin::mk_to_fp(decl_kind k, unsigned num_parameters, para
+         // 1 Real -> 1 FP
+         if (!(num_parameters == 2 && parameters[0].is_int() && parameters[1].is_int()))
+             m_manager->raise_exception("expecting two integer parameters to to_fp");
+-        if (domain[1] != m_real_sort)
++        if (domain[0] != m_real_sort)
+             m_manager->raise_exception("sort mismatch, expected one argument of Real sort");
+ 
+         sort * fp = mk_float_sort(parameters[0].get_int(), parameters[1].get_int());
+diff --git a/src/ast/rewriter/arith_rewriter.cpp b/src/ast/rewriter/arith_rewriter.cpp
+index 228a38f86..196014a06 100644
+--- a/src/ast/rewriter/arith_rewriter.cpp
++++ b/src/ast/rewriter/arith_rewriter.cpp
+@@ -281,7 +281,7 @@ bool arith_rewriter::is_non_negative(expr* e) {
+             continue;
+         if (is_power_of_positive(arg))
+             continue;
+-        if (seq().str.is_length(e))
++        if (seq().str.is_length(arg))
+             continue;
+         if (m_util.is_numeral(arg, r)) {
+             if (r.is_neg()) 
+@@ -842,8 +842,10 @@ br_status arith_rewriter::mk_and_core(unsigned n, expr* const* args, expr_ref& r
+         ptr_buffer<expr> rest;
+         for (unsigned i = 1; i < n; ++i) {
+             if (m_util.is_le(args[i], z, u) && u == y && m_util.is_numeral(z, b)) {
+-                if (b > a)
++                if (b > a) {
+                     arg0 = args[i];
++                    a = b;
++                }
+             }
+             else
+                 rest.push_back(args[i]);
+@@ -1581,13 +1583,13 @@ br_status arith_rewriter::mk_ashr_core(unsigned sz, expr* arg1, expr* arg2, expr
+             if (y >= sz)
+                 result = m_util.mk_int(N-1);
+             else
+-                result = m_util.mk_int(d);
++                result = m_util.mk_int(mod(d - rational::power_of_two(sz - y.get_unsigned()), N));
+         }
+         else {
+             if (y >= sz) 
+                 result = m_util.mk_int(0);
+             else 
+-                result = m_util.mk_int(mod(d - rational::power_of_two(sz - y.get_unsigned()), N));
++                result = m_util.mk_int(d);
+         }
+         return BR_DONE;
+     }
+diff --git a/src/ast/rewriter/array_rewriter.cpp b/src/ast/rewriter/array_rewriter.cpp
+index 67f969197..211edb356 100644
+--- a/src/ast/rewriter/array_rewriter.cpp
++++ b/src/ast/rewriter/array_rewriter.cpp
+@@ -65,7 +65,7 @@ br_status array_rewriter::mk_app_core(func_decl * f, unsigned num_args, expr * c
+                 result = m().mk_eq(result, val);
+                 st = BR_REWRITE_FULL;
+             }
+-            else if (a == e1 && vindex.size() == num_args + 2) {
++            else if (a == e1 && vindex.size() == num_args - 2) {
+                 // a [i: = x] peq_{i} a -- > true
+                 bool all_eq = true;
+                 for (unsigned i = 0, sz = vindex.size(); all_eq && i < sz;
+diff --git a/src/ast/rewriter/seq_rewriter.cpp b/src/ast/rewriter/seq_rewriter.cpp
+index 86bb297e9..62f8f7bcf 100644
+--- a/src/ast/rewriter/seq_rewriter.cpp
++++ b/src/ast/rewriter/seq_rewriter.cpp
+@@ -1480,12 +1480,13 @@ br_status seq_rewriter::mk_seq_last_index(expr* a, expr* b, expr_ref& result) {
+         return BR_REWRITE_FULL;
+     case longer_c: {
+         unsigned i = as.size();
++        unsigned sz = as.size();
+         while (i >= bs.size()) {
+             switch (is_suffix(as, bs)) {
+             case l_undef:
+                 return BR_FAILED;
+             case l_true:
+-                result = m_autil.mk_sub(str().mk_length(a), m_autil.mk_int(bs.size() - i));
++                result = m_autil.mk_sub(str().mk_length(a), m_autil.mk_int(bs.size() + sz - i));
+                 return BR_REWRITE3;
+             case l_false:
+                 as.pop_back();
+diff --git a/src/ast/seq_decl_plugin.cpp b/src/ast/seq_decl_plugin.cpp
+index 634ced5c9..00a45528b 100644
+--- a/src/ast/seq_decl_plugin.cpp
++++ b/src/ast/seq_decl_plugin.cpp
+@@ -1814,7 +1814,7 @@ seq_util::rex::info seq_util::rex::info::diff(seq_util::rex::info const& rhs) co
+     if (is_known()) {
+         if (rhs.is_known()) {
+             return info(interpreted & rhs.interpreted,
+-                ((nullable == l_true && rhs.nullable == l_false) ? l_true : ((nullable == l_false || rhs.nullable == l_false) ? l_false : l_undef)),
++                ((nullable == l_true && rhs.nullable == l_false) ? l_true : ((nullable == l_false || rhs.nullable == l_true) ? l_false : l_undef)),
+                 std::max(min_length, rhs.min_length));
+         }
+         else
+diff --git a/src/ast/simplifiers/bound_manager.cpp b/src/ast/simplifiers/bound_manager.cpp
+index de26699b9..15540e992 100644
+--- a/src/ast/simplifiers/bound_manager.cpp
++++ b/src/ast/simplifiers/bound_manager.cpp
+@@ -268,7 +268,7 @@ bool bound_manager::inconsistent() const {
+             if (lim1.first > lim2.first)
+                 return true;            
+             if (lim1.first == lim2.first &&
+-                !lim1.second && lim2.second) {
++                (lim1.second || lim2.second)) {
+                 return true;
+             }
+         }
+diff --git a/src/ast/simplifiers/extract_eqs.cpp b/src/ast/simplifiers/extract_eqs.cpp
+index 8789fa569..7cde2db6e 100644
+--- a/src/ast/simplifiers/extract_eqs.cpp
++++ b/src/ast/simplifiers/extract_eqs.cpp
+@@ -94,7 +94,7 @@ namespace euf {
+                         return;
+                     if (x1 == y2 && is_uninterp_const(x1))
+                         std::swap(x2, y2);
+-                    if (x2 == y2 && is_uninterp_const(x2))
++                    if (y1 == y2 && is_uninterp_const(y1))
+                         std::swap(x2, y2), std::swap(x1, y1);
+                     if (x2 == y1 && is_uninterp_const(x2))
+                         std::swap(x1, y1);
+diff --git a/src/ast/sls/sls_bv_eval.cpp b/src/ast/sls/sls_bv_eval.cpp
+index a1aadba47..d280413ad 100644
+--- a/src/ast/sls/sls_bv_eval.cpp
++++ b/src/ast/sls/sls_bv_eval.cpp
+@@ -1117,7 +1117,7 @@ namespace sls {
+             else 
+                 // b := a - e
+                 b.set_sub(m_tmp, a.bits(), e);       
+-            if (a.try_set(m_tmp))
++            if ((i == 0 ? a : b).try_set(m_tmp))
+                 return true;
+         }
+         // fall back to a random value
+diff --git a/src/ast/sls/sls_seq_plugin.cpp b/src/ast/sls/sls_seq_plugin.cpp
+index 0221e9f1d..5f85e8b74 100644
+--- a/src/ast/sls/sls_seq_plugin.cpp
++++ b/src/ast/sls/sls_seq_plugin.cpp
+@@ -464,7 +464,7 @@ namespace sls {
+                 zstring s2 = strval0(y);
+                 zstring c = strval0(z);
+                 
+-                if (s1.length() < s2.length()) 
++                if (s1.length() < s2.length() || s2.length() == 0) 
+                     ev.val1.svalue = s1;
+                 else {
+                     zstring r;
+diff --git a/src/math/dd/dd_bdd.h b/src/math/dd/dd_bdd.h
+index 352b48551..9f00e4de4 100644
+--- a/src/math/dd/dd_bdd.h
++++ b/src/math/dd/dd_bdd.h
+@@ -107,7 +107,7 @@ namespace dd {
+ 
+         struct eq_entry {
+             bool operator()(op_entry * a, op_entry * b) const { 
+-                return a->m_bdd1 == b->m_bdd2 && a->m_bdd2 == b->m_bdd2 && a->m_op == b->m_op;
++                return a->m_bdd1 == b->m_bdd1 && a->m_bdd2 == b->m_bdd2 && a->m_op == b->m_op;
+             }
+         };
+ 
+diff --git a/src/math/dd/dd_pdd.h b/src/math/dd/dd_pdd.h
+index 907176f04..26b50ba44 100644
+--- a/src/math/dd/dd_pdd.h
++++ b/src/math/dd/dd_pdd.h
+@@ -145,7 +145,7 @@ namespace dd {
+ 
+         struct eq_entry {
+             bool operator()(op_entry * a, op_entry * b) const { 
+-                return a->m_pdd1 == b->m_pdd2 && a->m_pdd2 == b->m_pdd2 && a->m_op == b->m_op;
++                return a->m_pdd1 == b->m_pdd1 && a->m_pdd2 == b->m_pdd2 && a->m_op == b->m_op;
+             }
+         };
+ 
+@@ -417,7 +417,7 @@ namespace dd {
+         pdd(unsigned root, pdd_manager* pm): root(root), m(pm) { m->inc_ref(root); }
+     public:
+         pdd(pdd_manager& m): pdd(0, m) { SASSERT(is_zero()); }
+-        pdd(pdd const& other): pdd(other.root, other.m) { m->inc_ref(root); }
++        pdd(pdd const& other): pdd(other.root, other.m) {}
+         pdd(pdd && other) noexcept : root(other.root), m(other.m) { other.root = 0; }
+         pdd& operator=(pdd const& other);
+         pdd& operator=(unsigned k);
+diff --git a/src/math/grobner/grobner.cpp b/src/math/grobner/grobner.cpp
+index cf4e68916..e83a88059 100644
+--- a/src/math/grobner/grobner.cpp
++++ b/src/math/grobner/grobner.cpp
+@@ -98,7 +98,7 @@ void grobner::push_scope() {
+ }
+ 
+ void grobner::pop_scope(unsigned num_scopes) {
+-    SASSERT(num_scopes >= get_scope_level());
++    SASSERT(num_scopes <= get_scope_level());
+     unsigned new_lvl = get_scope_level() - num_scopes;
+     scope & s        = m_scopes[new_lvl];
+     unfreeze_equations(s.m_equations_to_unfreeze_lim);
+diff --git a/src/math/lp/indexed_vector.h b/src/math/lp/indexed_vector.h
+index 66208fdba..9cd91feb7 100644
+--- a/src/math/lp/indexed_vector.h
++++ b/src/math/lp/indexed_vector.h
+@@ -72,7 +72,7 @@ public:
+                 return false;
+         }
+ 
+-        return vectors_are_equal(m_data, m_data);
++        return vectors_are_equal(m_data, y.m_data);
+ 
+     }
+ 
+diff --git a/src/math/lp/nla_intervals.cpp b/src/math/lp/nla_intervals.cpp
+index f6c15bd8b..999b65a98 100644
+--- a/src/math/lp/nla_intervals.cpp
++++ b/src/math/lp/nla_intervals.cpp
+@@ -350,7 +350,7 @@ bool intervals::conflict_u_l(const interval& a, const interval& b) const {
+             return false;
+      }
+ 
+-     return a.m_upper_open || b.m_upper_open;
++     return a.m_upper_open || b.m_lower_open;
+ }
+ 
+ template <e_with_deps wd, typename T>
+diff --git a/src/math/polynomial/algebraic_numbers.cpp b/src/math/polynomial/algebraic_numbers.cpp
+index 7c72ffd63..5b657108c 100644
+--- a/src/math/polynomial/algebraic_numbers.cpp
++++ b/src/math/polynomial/algebraic_numbers.cpp
+@@ -1283,7 +1283,7 @@ namespace algebraic_numbers {
+                     // a or b became basic
+                     SASSERT(a.is_basic() || b.is_basic());
+                     saved_a.restore_if_too_small();
+-                    saved_a.restore_if_too_small();
++                    saved_b.restore_if_too_small();
+                     return mk_basic(a, b, c);
+                 }
+             }
+diff --git a/src/math/polynomial/linear_eq_solver.h b/src/math/polynomial/linear_eq_solver.h
+index 9e12c2630..71e9266ce 100644
+--- a/src/math/polynomial/linear_eq_solver.h
++++ b/src/math/polynomial/linear_eq_solver.h
+@@ -96,6 +96,7 @@ public:
+             if (i == n)
+                 return false; // matrix is singular
+             A[k].swap(A[i]); // swap rows
++            std::swap(b[k], b[i]);
+             svector<numeral> & A_k = A[k];
+             numeral & A_k_k = A_k[k];
+             SASSERT(!m.is_zero(A_k_k));
+diff --git a/src/math/polynomial/polynomial.cpp b/src/math/polynomial/polynomial.cpp
+index f4cfa1fbd..aadb87f0f 100644
+--- a/src/math/polynomial/polynomial.cpp
++++ b/src/math/polynomial/polynomial.cpp
+@@ -1170,8 +1170,8 @@ namespace polynomial {
+             }
+             else {
+                 // gcd is one
+-                q1 = const_cast<monomial*>(m2);
+-                q2 = const_cast<monomial*>(m1);
++                q1 = const_cast<monomial*>(m1);
++                q2 = const_cast<monomial*>(m2);
+                 return m_unit;
+             }
+         }
+@@ -5283,6 +5283,7 @@ namespace polynomial {
+                 Q = m_zero;
+                 R = A;
+                 d = 0;
++                return;
+             }
+             scoped_numeral minus_a(m_manager);
+             polynomial_ref l_B(pm()); // leading coefficient of B (that is, coefficient of x^(deg_B))
+diff --git a/src/math/polynomial/rpolynomial.cpp b/src/math/polynomial/rpolynomial.cpp
+index 67b882525..f0bfc02ad 100644
+--- a/src/math/polynomial/rpolynomial.cpp
++++ b/src/math/polynomial/rpolynomial.cpp
+@@ -113,8 +113,8 @@ namespace rpolynomial {
+                         del_numeral(to_num_ptr(pn));
+                     }
+                     else {
+-                        SASSERT(is_poly(p));
+-                        polynomial * p_arg = to_poly(p);
++                        SASSERT(is_poly(pn));
++                        polynomial * p_arg = to_poly(pn);
+                         p_arg->dec_ref();
+                         if (p_arg->ref_count() == 0) {
+                             todo.push_back(p_arg);
+@@ -400,7 +400,7 @@ namespace rpolynomial {
+                 ptr_buffer<poly_or_num> new_args;
+                 new_args.push_back(add_core(c, _p->arg(0)));
+                 for (unsigned i = 1; i < sz; ++i)
+-                    new_args.push_back(_p->arg(1));
++                    new_args.push_back(_p->arg(i));
+                 return mk_poly_core(new_args.size(), new_args.data(), _p->max_var());
+             }
+         }
+diff --git a/src/math/simplex/model_based_opt.cpp b/src/math/simplex/model_based_opt.cpp
+index a8ac93fde..ded6aa645 100644
+--- a/src/math/simplex/model_based_opt.cpp
++++ b/src/math/simplex/model_based_opt.cpp
+@@ -89,7 +89,7 @@ namespace opt {
+     }
+     void model_based_opt::def::dec_ref() {
+         SASSERT(m_ref_count > 0);
+-        ++m_ref_count;
++        --m_ref_count;
+         if (m_ref_count == 0) 
+             dealloc(this);            
+     }
+diff --git a/src/math/simplex/simplex_def.h b/src/math/simplex/simplex_def.h
+index 69ed434ce..3e7cdbf00 100644
+--- a/src/math/simplex/simplex_def.h
++++ b/src/math/simplex/simplex_def.h
+@@ -959,7 +959,7 @@ namespace simplex {
+             if (below_lower(v)) 
+                 em.sub(vi.m_lower, vi.m_value, curr_error);
+             else if (above_upper(v)) 
+-                em.sub(vi.m_value, vi.m_lower, curr_error);
++                em.sub(vi.m_value, vi.m_upper, curr_error);
+             else
+                 continue;
+             SASSERT(is_pos(curr_error));
+diff --git a/src/math/subpaving/subpaving_t_def.h b/src/math/subpaving/subpaving_t_def.h
+index b71b10fae..5e962d08a 100644
+--- a/src/math/subpaving/subpaving_t_def.h
++++ b/src/math/subpaving/subpaving_t_def.h
+@@ -173,7 +173,7 @@ public:
+                     nm.neg(width);
+                 if (nm.lt(width, one))
+                     nm.set(width, one);
+-                nm.mul(penalty, width, width);
++                nm.div(penalty, width, width);
+             }
+             if (y == null_var || nm.gt(width, largest)) {
+                 y = x;
+@@ -658,10 +658,10 @@ void context_t<C>::display_bounds(std::ostream & out, node * n) const {
+ template<typename C>
+ bool context_t<C>::is_int(monomial const * m) const {
+     for (unsigned i = 0; i < m->size(); ++i) {
+-        if (is_int(m->x(i)))
+-            return true;
++        if (!is_int(m->x(i)))
++            return false;
+     }
+-    return false;
++    return true;
+ }
+ 
+ /**
+@@ -1625,8 +1625,8 @@ void context_t<C>::propagate_monomial_downward(var x, node * n, unsigned j) {
+             else {
+                 im().mul(d, yk, r);
+                 im().set(d, r);
+-                first = false;
+             }
++            first = false;
+         }       
+         if (im().contains_zero(d)) {
+             im().reset_lower(r);
+diff --git a/src/model/model_implicant.cpp b/src/model/model_implicant.cpp
+index 658fbb0ec..8c50fd5d0 100644
+--- a/src/model/model_implicant.cpp
++++ b/src/model/model_implicant.cpp
+@@ -359,7 +359,7 @@ void model_implicant::eval_arith(app* e) {
+         break;                            
+     case OP_UMINUS: 
+         SASSERT(arity == 1);
+-        set_number(e, get_number(e->get_arg(0)));
++        set_number(e, -get_number(e->get_arg(0)));
+         break;                
+     case OP_MUL: 
+         r = rational::one();
+diff --git a/src/muz/fp/datalog_parser.cpp b/src/muz/fp/datalog_parser.cpp
+index bac981392..f7c6ac200 100644
+--- a/src/muz/fp/datalog_parser.cpp
++++ b/src/muz/fp/datalog_parser.cpp
+@@ -263,7 +263,7 @@ public:
+     }
+ 
+     void save_and_next() {
+-        m_buffer << m_curr_char;
++        m_buffer << (char)m_curr_char;
+         next();
+     }
+ 
+diff --git a/src/muz/rel/dl_base.cpp b/src/muz/rel/dl_base.cpp
+index 57ac3ca3b..36dfc4d3f 100644
+--- a/src/muz/rel/dl_base.cpp
++++ b/src/muz/rel/dl_base.cpp
+@@ -177,7 +177,7 @@ namespace datalog {
+         unsigned s2_first_func = s2.first_functional();
+         unsigned second_ofs = s1_first_func;
+         unsigned first_func_ofs = second_ofs + s2_first_func;
+-        unsigned second_func_ofs = second_ofs + s1.functional_columns();
++        unsigned second_func_ofs = first_func_ofs + s1.functional_columns();
+ 
+         svector<unsigned> remaining_in_equivalence_class;
+         remaining_in_equivalence_class.resize(join_sig_sz, 0);
+diff --git a/src/muz/rel/dl_bound_relation.cpp b/src/muz/rel/dl_bound_relation.cpp
+index 2a078d8f7..7d9b010d6 100644
+--- a/src/muz/rel/dl_bound_relation.cpp
++++ b/src/muz/rel/dl_bound_relation.cpp
+@@ -504,7 +504,7 @@ namespace datalog {
+     }
+ 
+     bool bound_relation::is_empty(unsigned index, uint_set2 const& t) const {
+-        return t.lt.contains(find(index)) || t.le.contains(find(index));
++        return t.lt.contains(find(index));
+     }
+ 
+     void bound_relation::normalize(uint_set const& src, uint_set& dst) const {
+diff --git a/src/muz/rel/dl_instruction.cpp b/src/muz/rel/dl_instruction.cpp
+index ef486a2f6..093607793 100644
+--- a/src/muz/rel/dl_instruction.cpp
++++ b/src/muz/rel/dl_instruction.cpp
+@@ -90,7 +90,7 @@ namespace datalog {
+                 continue;
+             }
+             std::string annotation;
+-            get_register_annotation(i, annotation);
++            get_register_annotation(rg, annotation);
+             out << sz << "\t" << rows << "\t" << annotation << "\n";
+         }
+     }
+@@ -403,7 +403,7 @@ namespace datalog {
+         void make_annotations(execution_context & ctx) override {
+             std::string a1 = "rel1", a2 = "rel2";
+             ctx.get_register_annotation(m_rel1, a1);
+-            ctx.get_register_annotation(m_rel1, a1);
++            ctx.get_register_annotation(m_rel2, a2);
+             ctx.set_register_annotation(m_res, "join " + a1 + " " + a2);
+         }
+         std::ostream& display_head_impl(execution_context const & ctx, std::ostream & out) const override {
+diff --git a/src/muz/rel/dl_interval_relation.cpp b/src/muz/rel/dl_interval_relation.cpp
+index 81c630ec6..1a5b53caa 100644
+--- a/src/muz/rel/dl_interval_relation.cpp
++++ b/src/muz/rel/dl_interval_relation.cpp
+@@ -147,7 +147,7 @@ namespace datalog {
+             low = ext_numeral(false);
+             l_open = true;
+         }
+-        if (high < src2.sup() || (src2.sup() == high && !r_open && src2.is_upper_open())) {
++        if (high < src2.sup() || (src2.sup() == high && r_open && !src2.is_upper_open())) {
+             high = ext_numeral(true);
+             r_open = true;
+         }
+@@ -586,7 +586,7 @@ namespace datalog {
+             is_int = true;
+             if (!is_linear(cond->get_arg(0), y, x, k, true)) return false;
+             if (!is_linear(cond->get_arg(1), y, x, k, false)) return false;
+-            k += rational::one();
++            k -= rational::one();
+             return (x != UINT_MAX || y != UINT_MAX);
+         }
+         if (m.is_not(cond) && is_app(cond->get_arg(0))) {
+diff --git a/src/muz/rel/dl_relation_manager.cpp b/src/muz/rel/dl_relation_manager.cpp
+index dda270462..f74366b6f 100644
+--- a/src/muz/rel/dl_relation_manager.cpp
++++ b/src/muz/rel/dl_relation_manager.cpp
+@@ -830,6 +830,7 @@ namespace datalog {
+             if(!m_union_fun) {
+                 SASSERT(tgt.can_swap(*filtered_rel));
+                 tgt.swap(*filtered_rel);
++                return;
+             }
+             tgt.reset();
+             TRACE(dl, tgt.display(tout << "target reset:\n"); );
+diff --git a/src/muz/rel/dl_sparse_table.cpp b/src/muz/rel/dl_sparse_table.cpp
+index b59260863..d236e1902 100644
+--- a/src/muz/rel/dl_sparse_table.cpp
++++ b/src/muz/rel/dl_sparse_table.cpp
+@@ -534,7 +534,7 @@ namespace datalog {
+                 return false;
+             }
+             unsigned sz = get_signature().size();
+-            for (unsigned i=func_col_cnt; i<sz; ++i) {
++            for (unsigned i=get_signature().first_functional(); i<sz; ++i) {
+                 if (t.get_cell(ofs, i)!=f[i]) {
+                     return false;
+                 }
+@@ -1301,7 +1301,7 @@ namespace datalog {
+                 }
+                 else {
+                     m_t2_cols.push_back(t_cols[i]);
+-                    m_s2_cols.push_back(src_cols[i]);                    
++                    m_s2_cols.push_back(src_cols[i] - src1_size);                    
+                 }
+             }
+             m_s2_cols.append(src2_cols);
+@@ -1313,8 +1313,11 @@ namespace datalog {
+             sparse_table& t = get(_t);
+             svector<store_offset> to_remove;
+             collect_to_remove(t, get(_s1), get(_s2), to_remove);
+-            for (unsigned i = 0; i < to_remove.size(); ++i) {
+-                t.m_data.remove_offset(to_remove[i]);
++            //the largest offsets are at the end, so we can remove them one by one
++            while (!to_remove.empty()) {
++                store_offset removed_ofs = to_remove.back();
++                to_remove.pop_back();
++                t.m_data.remove_offset(removed_ofs);
+             }
+             t.reset_indexes();
+         }
+diff --git a/src/muz/spacer/spacer_matrix.cpp b/src/muz/spacer/spacer_matrix.cpp
+index 3000aaeee..99651a2f0 100644
+--- a/src/muz/spacer/spacer_matrix.cpp
++++ b/src/muz/spacer/spacer_matrix.cpp
+@@ -63,7 +63,7 @@ unsigned spacer_matrix::perform_gaussian_elimination() {
+             // reorder rows if necessary
+             vector<rational> tmp = m_matrix[i];
+             m_matrix[i] = m_matrix[max_index];
+-            m_matrix[max_index] = m_matrix[i];
++            m_matrix[max_index] = tmp;
+ 
+             // normalize row
+             rational pivot = m_matrix[i][j];
+@@ -74,7 +74,7 @@ unsigned spacer_matrix::perform_gaussian_elimination() {
+             }
+ 
+             // subtract row from all other rows
+-            for (unsigned k = 1; k < m_matrix.size(); ++k) {
++            for (unsigned k = 0; k < m_matrix.size(); ++k) {
+                 if (k != i) {
+                     rational factor = m_matrix[k][j];
+                     for (unsigned l = 0; l < m_matrix[k].size(); ++l) {
+diff --git a/src/nlsat/nlsat_interval_set.cpp b/src/nlsat/nlsat_interval_set.cpp
+index dc5740e10..d86df1758 100644
+--- a/src/nlsat/nlsat_interval_set.cpp
++++ b/src/nlsat/nlsat_interval_set.cpp
+@@ -738,7 +738,8 @@ namespace nlsat {
+         if (!s->m_intervals[0].m_lower_inf) {
+             // lower is not -oo
+             n++;
+-            m_am.int_lt(s->m_intervals[0].m_lower, w);
++            if (n == 1 || m_rand()%n == 0)
++                m_am.int_lt(s->m_intervals[0].m_lower, w);
+             if (!randomize)
+                 return;
+         }
+diff --git a/src/opt/opt_context.cpp b/src/opt/opt_context.cpp
+index 8bfef7f24..f9b583cf1 100644
+--- a/src/opt/opt_context.cpp
++++ b/src/opt/opt_context.cpp
+@@ -1100,8 +1100,8 @@ namespace opt {
+                 return false;
+             if (!is_zo && !all_of(*to_app(y), is_zero_one))
+                 return false;
+-            cardinalities.push_back(x);
+-            max_cardinality = std::max(max_cardinality, is_zo ? 1 : to_app(x)->get_num_args());
++            cardinalities.push_back(y);
++            max_cardinality = std::max(max_cardinality, is_zo ? 1 : to_app(y)->get_num_args());
+             min_cardinality = std::min(min_cardinality, is_zo ? 1 : to_app(y)->get_num_args());
+             return true;
+         };
+diff --git a/src/qe/lite/qe_lite_tactic.cpp b/src/qe/lite/qe_lite_tactic.cpp
+index 9a4ba46bc..f7692e04d 100644
+--- a/src/qe/lite/qe_lite_tactic.cpp
++++ b/src/qe/lite/qe_lite_tactic.cpp
+@@ -242,7 +242,7 @@ namespace qel {
+         bool is_var_diseq(expr * e, ptr_vector<var>& vs, expr_ref_vector& ts) {
+             expr* e1;
+             if (m.is_not(e, e1)) {
+-                return is_var_eq(e, vs, ts);
++                return is_var_eq(e1, vs, ts);
+             }
+             else if (is_var_eq(e, vs, ts) && vs.size() == 1 && m.is_bool(vs[0])) {
+                 expr_ref tmp(m);
+diff --git a/src/sat/sat_lookahead.cpp b/src/sat/sat_lookahead.cpp
+index 21c379a84..419e3f1b8 100644
+--- a/src/sat/sat_lookahead.cpp
++++ b/src/sat/sat_lookahead.cpp
+@@ -333,7 +333,7 @@ namespace sat {
+                 }                
+             }
+         }
+-        if (m_candidates.empty() && (m_select_lookahead_vars.empty() && newbies)) {
++        if (m_candidates.empty() && (m_select_lookahead_vars.empty() || newbies)) {
+             for (bool_var x : m_freevars) {
+                 SASSERT(is_undef(x));
+                 if (newbies || active_prefix(x)) {
+diff --git a/src/smt/theory_dense_diff_logic_def.h b/src/smt/theory_dense_diff_logic_def.h
+index e260b0f6b..1a6027e46 100644
+--- a/src/smt/theory_dense_diff_logic_def.h
++++ b/src/smt/theory_dense_diff_logic_def.h
+@@ -900,7 +900,7 @@ namespace smt {
+         objective_term const& objective = m_objectives[v];   
+         inf_eps r = inf_eps(m_objective_consts[v]);
+         for (unsigned i = 0; i < objective.size(); ++i) {
+-            numeral n = m_assignment[v];
++            numeral n = m_assignment[objective[i].first];
+             rational r1 = n.get_rational().to_rational();
+             rational r2 = n.get_infinitesimal().to_rational();
+             r += objective[i].second * inf_eps(rational(0), inf_rational(r1, r2));
+diff --git a/src/smt/theory_special_relations.cpp b/src/smt/theory_special_relations.cpp
+index aec069a02..9ed3450df 100644
+--- a/src/smt/theory_special_relations.cpp
++++ b/src/smt/theory_special_relations.cpp
+@@ -424,7 +424,7 @@ namespace smt {
+                 return l_false;
+             }
+             // the nodes visited from v1 become target for v2
+-            if (r.m_graph.reachable(a.v2(), visited, target, w)) {
++            if (r.m_graph.reachable(a.v1(), visited, target, w)) {
+                 //
+                 // we have the following:
+                 // v1 <= w
+@@ -1143,7 +1143,7 @@ namespace smt {
+                 init_model_po(*kv.m_value, m, true);
+                 break;
+             case sr_tc:
+-                init_model_po(*kv.m_value, m, true);                
++                init_model_po(*kv.m_value, m, false);                
+                 break;
+             default:
+                 // other 28 combinations of 0x1F
+diff --git a/src/tactic/arith/pb2bv_tactic.cpp b/src/tactic/arith/pb2bv_tactic.cpp
+index 5c7a172ed..ac4d997dc 100644
+--- a/src/tactic/arith/pb2bv_tactic.cpp
++++ b/src/tactic/arith/pb2bv_tactic.cpp
+@@ -536,7 +536,7 @@ private:
+             it  = m_p.begin();
+             numeral a_sum;
+             for (; it != end; ++it) {
+-                a_sum += m_c;
++                a_sum += it->m_a;
+                 if (a_sum >= m_c)
+                     break;
+             }
+diff --git a/src/tactic/bv/bit_blaster_model_converter.cpp b/src/tactic/bv/bit_blaster_model_converter.cpp
+index 76741fd2d..5460eb3b4 100644
+--- a/src/tactic/bv/bit_blaster_model_converter.cpp
++++ b/src/tactic/bv/bit_blaster_model_converter.cpp
+@@ -226,8 +226,9 @@ struct bit_blaster_model_converter : public model_converter {
+                     var2value.push_back({ expr_ref(arg, m()), bit_k });
+                     ++k;
+                 }
+-                var2value[i] = var2value.back();
++                var2value[j] = var2value.back();
+                 var2value.pop_back();                
++                break;
+             }
+         }
+     }
+diff --git a/src/util/backtrackable_set.h b/src/util/backtrackable_set.h
+index a02ec4c9b..f263f13ed 100644
+--- a/src/util/backtrackable_set.h
++++ b/src/util/backtrackable_set.h
+@@ -56,7 +56,7 @@ public:
+                 
+     void erase(T const & e) {
+         if (m_scopes.empty()) {
+-            m_set.insert(e); 
++            m_set.erase(e); 
+         }
+         else if (m_set.contains(e)) {
+             m_set.erase(e);
+diff --git a/src/util/basic_interval.h b/src/util/basic_interval.h
+index ea35259a0..1ea8c1140 100644
+--- a/src/util/basic_interval.h
++++ b/src/util/basic_interval.h
+@@ -201,7 +201,7 @@ public:
+     bool disjoint(interval const & a, interval const & b) {
+         return 
+             (closed  && (m().lt(a.m_upper, b.m_lower) || m().lt(b.m_upper, a.m_lower))) ||
+-            (!closed && (m().le(a.m_upper, b.m_upper) || m().le(b.m_upper, a.m_lower)));
++            (!closed && (m().le(a.m_upper, b.m_lower) || m().le(b.m_upper, a.m_lower)));
+     }
+     
+     /**
+diff --git a/src/util/buffer.h b/src/util/buffer.h
+index de12b0f34..c239010cc 100644
+--- a/src/util/buffer.h
++++ b/src/util/buffer.h
+@@ -139,13 +139,13 @@ public:
+     }
+ 
+     void set_end(iterator it) {
+-        m_pos = static_cast<unsigned>(it - m_buffer);
+         if (CallDestructors) {
+             iterator e  = end();
+-            for (; it != e; ++it) {
+-                it->~T();
++            for (iterator i = it; i != e; ++i) {
++                i->~T();
+             }
+         }
++        m_pos = static_cast<unsigned>(it - m_buffer);
+     }
+     
+     const_iterator begin() const { 
+diff --git a/src/util/checked_int64.h b/src/util/checked_int64.h
+index 41ac88ef7..5ac9dfc56 100644
+--- a/src/util/checked_int64.h
++++ b/src/util/checked_int64.h
+@@ -56,7 +56,7 @@ public:
+     bool is_minus_one() const { return m_value == -1; }
+     bool is_nonneg() const { return m_value >= 0; }
+     bool is_nonpos() const { return m_value <= 0; }
+-    bool is_even() const { return 0 == (m_value ^ 0x1); }
++    bool is_even() const { return 0 == (m_value & 0x1); }
+     
+     static checked_int64 zero() { return ci(0); }
+     static checked_int64 one() { return ci(1); }
+@@ -364,7 +364,7 @@ inline checked_int64<CHECK> gcd(checked_int64<CHECK> const& a, checked_int64<CHE
+     checked_int64<CHECK> _a = a;
+     checked_int64<CHECK> _b = b;
+     x = 0;
+-    y = 0;
++    y = 1;
+     checked_int64<CHECK> lastx = 1;
+     checked_int64<CHECK> lasty = 0;
+     while (_b != 0) {
+@@ -379,5 +379,7 @@ inline checked_int64<CHECK> gcd(checked_int64<CHECK> const& a, checked_int64<CHE
+         y = lasty - q * y;
+         lasty = temp;
+     }
++    x = lastx;
++    y = lasty;
+     return _a;
+ }
+diff --git a/src/util/min_cut.cpp b/src/util/min_cut.cpp
+index a21b7d4af..bc7644155 100644
+--- a/src/util/min_cut.cpp
++++ b/src/util/min_cut.cpp
+@@ -163,7 +163,7 @@ void min_cut::augment_path() {
+             }
+         }
+         if (!already_exists) {
+-            m_edges[k].push_back(edge(1, max));
++            m_edges[k].push_back(edge(l, max));
+         }
+         k = l;
+     }
+diff --git a/src/util/mpf.cpp b/src/util/mpf.cpp
+index 39941bdd3..237963d7b 100644
+--- a/src/util/mpf.cpp
++++ b/src/util/mpf.cpp
+@@ -38,7 +38,7 @@ void mpf::set(unsigned _ebits, unsigned _sbits) {
+ 
+ mpf::mpf(unsigned _ebits, unsigned _sbits):
+     significand(0) {
+-    set(ebits, sbits);
++    set(_ebits, _sbits);
+ }
+ 
+ void mpf::swap(mpf & other) noexcept {
+@@ -1641,7 +1641,7 @@ std::string mpf_manager::to_string_binary(mpf const & x, unsigned upper_extra, u
+     else if (is_inf(x))
+         res = std::string("") + "#b" + (sgn(x)?"1":"0") +  " " +
+               "#b" + std::string(x.ebits, '1') + " " +
+-              "#b" + std::string(x.sbits - 1, '0') + "1 " +
++              "#b" + std::string(x.sbits - 1, '0') + " " +
+               "(" + (sgn(x)?"-":"+") + "oo)";
+     else if (is_zero(x))
+         res = std::string("") + "#b" + (sgn(x) ? "1" : "0") + " " +
+diff --git a/src/util/mpff.cpp b/src/util/mpff.cpp
+index a0851bad6..340d42830 100644
+--- a/src/util/mpff.cpp
++++ b/src/util/mpff.cpp
+@@ -363,6 +363,7 @@ void mpff_manager::set_core(mpff & n, mpz_manager<SYNCH> & m, mpz const & v) {
+                 if (w[j] != 0) {
+                     // imprecision detected.
+                     inc_significand(n);
++                    break;
+                 }
+             }
+             // it is precise
+diff --git a/src/util/mpfx.cpp b/src/util/mpfx.cpp
+index 9e2f0d06f..b443aa4a4 100644
+--- a/src/util/mpfx.cpp
++++ b/src/util/mpfx.cpp
+@@ -287,7 +287,7 @@ void mpfx_manager::set_core(mpfx & n, mpq_manager<SYNCH> & m, mpq const & v) {
+     else {
+         allocate_if_needed(n);
+         _scoped_numeral<mpz_manager<SYNCH> > tmp(m);
+-        n.m_sign = is_neg(n);
++        n.m_sign = m.is_neg(v);
+         m.mul2k(v.numerator(), 8 * sizeof(unsigned) * m_frac_part_sz, tmp);
+         m.abs(tmp);
+         if ((n.m_sign == 1) != m_to_plus_inf && !m.divides(v.denominator(), tmp)) {
+diff --git a/src/util/mpq_inf.h b/src/util/mpq_inf.h
+index d8e9148e1..f0c68b567 100644
+--- a/src/util/mpq_inf.h
++++ b/src/util/mpq_inf.h
+@@ -259,7 +259,7 @@ public:
+ 
+     void floor(mpq_inf const & a, mpq & b) {
+         if (m.is_int(a.first)) {
+-            if (m.is_neg(a.first))
++            if (m.is_neg(a.second))
+                 m.sub(a.first, mpq(1), b); // floor(k - delta*epsilon) --> k-1
+             else
+                 m.set(b, a.first);
+diff --git a/src/util/prime_generator.cpp b/src/util/prime_generator.cpp
+index 9015123c8..20fc83fe1 100644
+--- a/src/util/prime_generator.cpp
++++ b/src/util/prime_generator.cpp
+@@ -92,7 +92,7 @@ uint64_t prime_generator::operator()(unsigned idx) {
+     process_next_k_numbers(1024);
+     if (idx < m_primes.size())
+         return m_primes[idx];
+-    while (idx <= m_primes.size())
++    while (idx >= m_primes.size())
+         process_next_k_numbers(1024*16);
+     return m_primes[idx];
+ }
+diff --git a/src/util/statistics.cpp b/src/util/statistics.cpp
+index 2c842dc09..e6f1e12fd 100644
+--- a/src/util/statistics.cpp
++++ b/src/util/statistics.cpp
+@@ -180,6 +180,7 @@ static void display_internal(std::ostream & out, M const & m) {
+                 out << "_";
+             else
+                 out << *key;
++            ++key;
+         }
+         out << " " << kv.m_value << "\n";
+     }
+diff --git a/src/util/util.h b/src/util/util.h
+index d580209e9..01dc634dc 100644
+--- a/src/util/util.h
++++ b/src/util/util.h
+@@ -138,7 +138,7 @@ static inline unsigned get_num_1bits(uint64_t v) {
+         v1 &= v1 - 1; 
+     }
+ #endif
+-    v = v - (v >> 1) & 0x5555555555555555;
++    v = v - ((v >> 1) & 0x5555555555555555);
+     v = (v & 0x3333333333333333) + ((v >> 2) & 0x3333333333333333); 
+     v = (v + (v >> 4)) & 0x0F0F0F0F0F0F0F0F;
+     uint64_t r = (v * 0x0101010101010101) >> 56;

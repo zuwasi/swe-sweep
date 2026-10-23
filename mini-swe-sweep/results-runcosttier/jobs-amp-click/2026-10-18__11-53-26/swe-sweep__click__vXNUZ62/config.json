@@ -1,0 +1,15 @@
+{
+    "task": {
+        "path": "/tmp/swe-sweep-task-2tkot0zc/swe-sweep__click"
+    },
+    "trial_name": "swe-sweep__click__vXNUZ62",
+    "trials_dir": "/home/danie/mini-swe-sweep/results/jobs-amp-click/2026-10-18__11-53-26",
+    "verifier_timeout_multiplier": 0.4067796610169492,
+    "agent": {
+        "name": "swesweep.patch_agent:PatchAgent",
+        "kwargs": {
+            "patch_path": "/home/danie/mini-swe-sweep/patches/amp__click.diff"
+        }
+    },
+    "job_id": "fb5b5084-1530-4414-8168-ad0639cbaa84"
+}

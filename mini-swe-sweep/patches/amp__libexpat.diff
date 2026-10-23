@@ -1,0 +1,37 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index b2f5fc6..62a390e 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -3000,9 +3000,6 @@ doContent(XML_Parser parser, int startTagLevel, const ENCODING *enc,
+         int len;
+         const char *rawName;
+         TAG *tag = parser->m_tagStack;
+-        parser->m_tagStack = tag->parent;
+-        tag->parent = parser->m_freeTagList;
+-        parser->m_freeTagList = tag;
+         rawName = s + enc->minBytesPerChar * 2;
+         len = XmlNameLength(enc, rawName);
+         if (len != tag->rawNameLength
+@@ -3010,6 +3007,9 @@ doContent(XML_Parser parser, int startTagLevel, const ENCODING *enc,
+           *eventPP = rawName;
+           return XML_ERROR_TAG_MISMATCH;
+         }
++        parser->m_tagStack = tag->parent;
++        tag->parent = parser->m_freeTagList;
++        parser->m_freeTagList = tag;
+         --parser->m_tagLevel;
+         if (parser->m_endElementHandler) {
+           const XML_Char *localPart;
+diff --git a/expat/xmlwf/xmlwf.c b/expat/xmlwf/xmlwf.c
+index 29118bb..430a269 100644
+--- a/expat/xmlwf/xmlwf.c
++++ b/expat/xmlwf/xmlwf.c
+@@ -217,7 +217,7 @@ nsattcmp(const void *p1, const void *p2) {
+   const XML_Char *att1 = *(const XML_Char **)p1;
+   const XML_Char *att2 = *(const XML_Char **)p2;
+   int sep1 = (tcsrchr(att1, NSSEP) != 0);
+-  int sep2 = (tcsrchr(att1, NSSEP) != 0);
++  int sep2 = (tcsrchr(att2, NSSEP) != 0);
+   if (sep1 != sep2)
+     return sep1 - sep2;
+   return tcscmp(att1, att2);

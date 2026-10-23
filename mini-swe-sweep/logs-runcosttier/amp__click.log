@@ -1,0 +1,17 @@
+Done. The final sweep covered the remaining examples and docs; one more real bug was found and fixed, and the full test suite is in the same state as baseline.
+
+## Fixes applied (working tree, uncommitted)
+
+1. **Bash completion script — `COMREPLY` typo** (`src/click/shell_completion.py`): the `dir`/`file` branches of the generated `_click_completion` function cleared the wrong variable (`COMREPLY=()`), so the candidate list was never reset; both now use `COMPREPLY=()` like the `plain` branch.
+2. **Bash completion function name mangling** (same file): `re.sub(r"\W*", "", name, re.ASCII)` passed `re.ASCII` into the `count` slot, so non-word characters were stripped only once instead of globally — a name like `foo.bär` could leave a stray character in the generated function name. Now `flags=re.ASCII`.
+3. **Imagepipe example flips top-to-bottom sideways** (`examples/imagepipe/imagepipe.py`): `convert_flip`'s `"tb"`/`"topbottom"`/`"upsidedown"` branch returned `Image.FLIP_LEFT_RIGHT` while reporting the direction as "top to bottom" — contradicting the option's own `[LR / TB]` help. It now returns `Image.FLIP_TOP_BOTTOM`. Smoke-tested `open … transpose -f tb …` through the CLI and it transposes correctly with the installed Pillow.
+
+## Bug found but not fixable under the rules
+
+`click.style()` in `src/click/termui.py` emits the **off** codes for `overline` (`55` instead of `53`) and `italic` (`23` instead of `3`) — verified by running it — but `tests/test_utils.py::test_styling` (a pre-existing green test) asserts exactly those wrong escape sequences. Fixing it would break a green test, so per the rules the bug was left in place (the attempted fix was reverted).
+
+## Verification
+
+- `PYTHONPATH=src python -m pytest tests -q`: **487 passed, 21 skipped, 1 xfailed**, with only the pre-existing `test_arguments.py::test_bytes_args` failure/error — identical to the baseline before any edits (it's a pytest-9 monkeypatch/stdin-encoding environment incompatibility, not a repo bug).
+- Dozens of other behaviors were checked against docs, docstrings, and examples and found consistent (option naming, ranges, choices, parser edge cases, result callbacks, progress bars, completion sources, examples `aliases`/`repo`/`colors`/`validation`/`naval`/`inout`/`termui`/`complex`).
+- Nothing committed; `git status` shows exactly the two modified files listed above.

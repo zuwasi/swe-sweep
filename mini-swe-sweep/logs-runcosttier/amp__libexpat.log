@@ -1,0 +1,44 @@
+I fixed the bugs below in `xmltok_impl.c`, `xmlparse.c` and `xmlwf.c`. All pre-existing tests still pass: `runtests` 335/335 and `runtestspp` 335/335, with no build warnings. The changes are uncommitted in the working tree.
+
+**Bugs fixed:**
+- **Invalid UTF-8 accepted in names:** input such as `<a\xc3\x3c/>` used to parse. The name checks in [xmltok_impl.c](file:///home/danie/mini-swe-sweep/repos/libexpat/expat/lib/xmltok_impl.c#L69-L76) now reject invalid sequences, and so does the prolog tokenizer.
+- **Crashes on deep nesting:** deeply nested entities and `(((...` content models used to segfault. Entity expansion and content-model building in `xmlparse.c` no longer use recursion, and these inputs now parse correctly.
+- **Memory errors confirmed with ASan:**
+  - A use-after-free when suspending inside an entity.
+  - A leak after a mismatched end tag followed by `XML_ParserReset`.
+  - A use-after-free of the parent's DTD when parser creation fails partway.
+- **Integer overflows:** `XML_GetBuffer`, `storeRawNames`, `copyString`, `dtdCopy`, `nextScaffoldPart` and the entity-value length counting now check for overflow.
+- **Missing argument checks:** `XML_ParseBuffer` now rejects a negative length. `XML_ExternalEntityParserCreate` without `XML_DTD` now handles a NULL context.
+- **Recursive parameter entity accepted:** `<!ENTITY % a "%a;">` in an external DTD now fails with a recursive-entity error, as the XML spec's "No Recursion" rule requires.
+- **Wrong results while suspended inside entities:**
+  - Entity text was dropped.
+  - Asynchronous-entity and incomplete-markup errors were missed.
+  - Bogus "mismatched tag" errors appeared.
+  
+  Results under suspension now match the results without suspension.
+- **xmlwf:**
+  - It leaked the output name and the parser when the output file couldn't be opened.
+  - `nsattcmp` compared `att1` with itself. Someone else edited that line at the same time; their fix matches what was needed and I left it in place.
+
+**How I checked:** I compared xmlwf and a test driver built from the original and the new library, both under ASan and UBSan. Without suspension, output is identical on all test documents, including those with parameter entities, external DTDs and external entities. With suspension at every callback, every difference is a case where the old build was wrong. Resetting or freeing the parser while suspended inside nested entities gives no ASan or leak reports.
+
+**Left alone on purpose:**
+- **Namespace separator inside a URI:** the docs say Expat doesn't check URIs.
+- **`XML_StopParser` on a parser that hasn't started:** the docs call this misuse, and fixing it would need a new error code.
+- **`XML_GetBuffer(0)` returning NULL:** this is documented.
+- **xmlwf's `</entity/>` output string:** I left it as is.
+
+The largest change is in `xmlparse.c` (about 560 lines). That is the rewrite that removes recursion from entity expansion, so it's the part most worth reviewing.
+ti-branch models parse correctly).
+- `copyString`: `charsRequired` changed to `size_t` for length-type consistency.
+
+## Investigated and deliberately left alone
+- `XML_SetHashSalt`/`XML_SetEncoding` return success after a *finished* (final) parse while their header notes say they block "after `XML_Parse` has been called". The code intentionally blocks only mid-parse (`XML_PARSING`/`XML_SUSPENDED`) so settings can be changed in the `XML_INITIALIZED` state the `XML_ParserReset` reuse workflow depends on (used by the in-repo `tests/benchmark`); tightening it would churn shared semantics for a doc imprecision.
+- `expat/lib/nametab.h` verified byte-identical to the in-repo generator (`expat/gennmtab/gennmtab.c`); `XML_ErrorString` verified to match the `enum XML_Error` order (44 entries); the `.def` export lists, `siphash.h` (against its own test vectors), `expat.h`, `xmltok.h`, the character-class tables, `xmlwf` docs/usage, and the build/version files were all checked and found consistent.
+
+## Verification evidence
+- `runtests` and `runtestspp`: **100% — Checks: 335, Failed: 0** each, on a rebuild of the final tree.
+- `-Wall -Wextra` build: no warnings from library or tool sources.
+- Side-by-side old/new behavioral tests for the tokenizer fix; `xmlwf` namespace-sort and content-model smoke tests, all passing.
+
+Delivery caveat: the fixes are working-tree edits only; nothing is committed or pushed.

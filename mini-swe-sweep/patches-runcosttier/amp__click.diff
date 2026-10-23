@@ -1,0 +1,39 @@
+diff --git a/examples/imagepipe/imagepipe.py b/examples/imagepipe/imagepipe.py
+index e2d2f03..0a346c8 100644
+--- a/examples/imagepipe/imagepipe.py
++++ b/examples/imagepipe/imagepipe.py
+@@ -182,7 +182,7 @@ def convert_flip(ctx, param, value):
+     if value in ("lr", "leftright"):
+         return (Image.FLIP_LEFT_RIGHT, "left to right")
+     if value in ("tb", "topbottom", "upsidedown", "ud"):
+-        return (Image.FLIP_LEFT_RIGHT, "top to bottom")
++        return (Image.FLIP_TOP_BOTTOM, "top to bottom")
+     raise click.BadParameter(f"invalid flip '{value}'")
+ 
+ 
+diff --git a/src/click/shell_completion.py b/src/click/shell_completion.py
+index 706fb69..372293b 100644
+--- a/src/click/shell_completion.py
++++ b/src/click/shell_completion.py
+@@ -102,10 +102,10 @@ _SOURCE_BASH = """\
+         IFS=',' read type value <<< "$completion"
+ 
+         if [[ $type == 'dir' ]]; then
+-            COMREPLY=()
++            COMPREPLY=()
+             compopt -o dirnames
+         elif [[ $type == 'file' ]]; then
+-            COMREPLY=()
++            COMPREPLY=()
+             compopt -o default
+         elif [[ $type == 'plain' ]]; then
+             COMPREPLY+=($value)
+@@ -228,7 +228,7 @@ class ShellComplete:
+         """The name of the shell function defined by the completion
+         script.
+         """
+-        safe_name = re.sub(r"\W*", "", self.prog_name.replace("-", "_"), re.ASCII)
++        safe_name = re.sub(r"\W*", "", self.prog_name.replace("-", "_"), flags=re.ASCII)
+         return f"_{safe_name}_completion"
+ 
+     def source_vars(self) -> t.Dict[str, t.Any]:

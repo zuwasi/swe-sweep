@@ -1,0 +1,3 @@
+2026-10-18 09:56:52,574 INFO agent patch: /logs/artifacts/model.patch (4113 bytes)
+2026-10-18 09:56:52,574 INFO SWE-sweep eval: task=roslyn version=10.0.100 subtasks=5
+2026-10-18 10:13:11,610 INFO SWE-sweep eval: score=0.0000 resolved=0/5 partial=0 visible_ok=True patch_applied=True build_ok=True

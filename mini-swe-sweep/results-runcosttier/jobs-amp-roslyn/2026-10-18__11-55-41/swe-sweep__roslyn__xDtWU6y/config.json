@@ -1,0 +1,15 @@
+{
+    "task": {
+        "path": "/tmp/swe-sweep-task-zn6bk50w/swe-sweep__roslyn"
+    },
+    "trial_name": "swe-sweep__roslyn__xDtWU6y",
+    "trials_dir": "/home/danie/mini-swe-sweep/results/jobs-amp-roslyn/2026-10-18__11-55-41",
+    "verifier_timeout_multiplier": 0.16666666666666666,
+    "agent": {
+        "name": "swesweep.patch_agent:PatchAgent",
+        "kwargs": {
+            "patch_path": "/home/danie/mini-swe-sweep/patches/amp__roslyn.diff"
+        }
+    },
+    "job_id": "2a65c6f3-442c-435a-8a0f-ab0decc0d4cf"
+}

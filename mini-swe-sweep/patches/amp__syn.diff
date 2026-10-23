@@ -1,0 +1,118 @@
+diff --git a/src/expr.rs b/src/expr.rs
+index 8a832e0..52577e4 100644
+--- a/src/expr.rs
++++ b/src/expr.rs
+@@ -1210,6 +1210,8 @@ pub(crate) fn requires_terminator(expr: &Expr) -> bool {
+ pub(crate) mod parsing {
+     use super::*;
+ 
++    #[cfg(feature = "full")]
++    use crate::parse::discouraged::Speculative;
+     use crate::parse::{Parse, ParseStream, Result};
+     use crate::path;
+ 
+@@ -1558,6 +1560,7 @@ pub(crate) mod parsing {
+                     break;
+                 }
+                 attrs.push(attr);
++                input.advance_to(&ahead);
+             } else if input.peek(Token![#]) {
+                 attrs.push(input.call(attr::parsing::single_parse_outer)?);
+             } else {
+diff --git a/src/generics.rs b/src/generics.rs
+index d0015db..bf4108b 100644
+--- a/src/generics.rs
++++ b/src/generics.rs
+@@ -1080,6 +1080,9 @@ mod printing {
+                                 (Some(TokenTree::Punct(ref q)), Some(TokenTree::Ident(ref c)))
+                                     if q.as_char() == '?' && c == "const" =>
+                                 {
++                                    if self.bounds.is_empty() {
++                                        TokensOrDefault(&self.colon_token).to_tokens(tokens);
++                                    }
+                                     return default.to_tokens(tokens);
+                                 }
+                                 _ => {}
+diff --git a/src/item.rs b/src/item.rs
+index 9a59227..3868792 100644
+--- a/src/item.rs
++++ b/src/item.rs
+@@ -3052,6 +3052,7 @@ mod printing {
+             }
+             self.generics.where_clause.to_tokens(tokens);
+             self.brace_token.surround(tokens, |tokens| {
++                tokens.append_all(self.attrs.inner());
+                 tokens.append_all(&self.items);
+             });
+         }
+diff --git a/src/lit.rs b/src/lit.rs
+index 692391d..11550bd 100644
+--- a/src/lit.rs
++++ b/src/lit.rs
+@@ -351,7 +351,20 @@ impl LitByteStr {
+ 
+ impl LitByte {
+     pub fn new(value: u8, span: Span) -> Self {
+-        let mut token = Literal::u8_suffixed(value);
++        let mut repr = String::from("b'");
++        match value {
++            b'\0' => repr.push_str("\\0"),
++            b'\t' => repr.push_str("\\t"),
++            b'\n' => repr.push_str("\\n"),
++            b'\r' => repr.push_str("\\r"),
++            b'\'' => repr.push_str("\\'"),
++            b'\\' => repr.push_str("\\\\"),
++            b' '..=b'~' => repr.push(value as char),
++            _ => repr.push_str(&format!("\\x{:02x}", value)),
++        }
++        repr.push('\'');
++
++        let mut token = value::to_literal(&repr, "", "").unwrap();
+         token.set_span(span);
+         LitByte {
+             repr: Box::new(LitRepr {
+@@ -1063,7 +1076,7 @@ mod value {
+                         b'x' => {
+                             let (byte, rest) = backslash_x(s);
+                             s = rest;
+-                            assert!(byte <= 0x80, "Invalid \\x byte in string literal");
++                            assert!(byte <= 0x7F, "Invalid \\x byte in string literal");
+                             char::from_u32(u32::from(byte)).unwrap()
+                         }
+                         b'u' => {
+@@ -1257,7 +1270,7 @@ mod value {
+                     b'x' => {
+                         let (byte, rest) = backslash_x(s);
+                         s = rest;
+-                        assert!(byte <= 0x80, "Invalid \\x byte in string literal");
++                        assert!(byte <= 0x7F, "Invalid \\x byte in string literal");
+                         char::from_u32(u32::from(byte)).unwrap()
+                     }
+                     b'u' => {
+diff --git a/src/ty.rs b/src/ty.rs
+index ed263e6..36da8f8 100644
+--- a/src/ty.rs
++++ b/src/ty.rs
+@@ -761,7 +761,9 @@ pub mod parsing {
+                     }
+ 
+                     if let Some(arg) = parse_bare_fn_arg(&args, allow_mut_self)? {
+-                        inputs.push_value(BareFnArg { attrs, ..arg });
++                        if !has_mut_self {
++                            inputs.push_value(BareFnArg { attrs, ..arg });
++                        }
+                     } else {
+                         has_mut_self = true;
+                     }
+@@ -769,7 +771,10 @@ pub mod parsing {
+                         break;
+                     }
+ 
+-                    inputs.push_punct(args.parse()?);
++                    let comma = args.parse()?;
++                    if !has_mut_self {
++                        inputs.push_punct(comma);
++                    }
+                 }
+ 
+                 inputs

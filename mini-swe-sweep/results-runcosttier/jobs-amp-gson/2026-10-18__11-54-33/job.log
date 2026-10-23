@@ -1,0 +1,6 @@
+Skipping image OS validation for hb__3a31b4e7826f7ae699549a67630c7bb2: docker inspect returned 1
+Collecting main service artifacts
+Running collect hook in service 'main': 'mkdir -p /logs/artifacts && cd /gson && git add -A && git diff --cached --binary baseline > /logs/artifacts/model.patch'
+Collect hook in service 'main' completed
+Artifact collision: source '/logs/artifacts/model.patch' (service 'main') maps to host path /home/danie/mini-swe-sweep/results/jobs-amp-gson/2026-10-18__11-54-33/swe-sweep__gson__88vgCSW/artifacts/logs/artifacts/model.patch, which overlaps content already claimed by source '/logs/artifacts'; keeping the first and skipping this one.
+Skipping image OS validation for hb__dd900eef834b1b610757083cd7939c2f: docker inspect returned 1

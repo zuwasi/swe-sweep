@@ -1,0 +1,45 @@
+diff --git a/src/item.rs b/src/item.rs
+index 9a59227..3868792 100644
+--- a/src/item.rs
++++ b/src/item.rs
+@@ -3052,6 +3052,7 @@ mod printing {
+             }
+             self.generics.where_clause.to_tokens(tokens);
+             self.brace_token.surround(tokens, |tokens| {
++                tokens.append_all(self.attrs.inner());
+                 tokens.append_all(&self.items);
+             });
+         }
+diff --git a/src/lit.rs b/src/lit.rs
+index 692391d..ea3a433 100644
+--- a/src/lit.rs
++++ b/src/lit.rs
+@@ -351,7 +351,27 @@ impl LitByteStr {
+ 
+ impl LitByte {
+     pub fn new(value: u8, span: Span) -> Self {
+-        let mut token = Literal::u8_suffixed(value);
++        let mut repr = String::from("b'");
++        match value {
++            b'\0' => repr.push_str(r"\0"),
++            b'\t' => repr.push_str(r"\t"),
++            b'\n' => repr.push_str(r"\n"),
++            b'\r' => repr.push_str(r"\r"),
++            b'\'' => repr.push_str(r"\'"),
++            b'\\' => repr.push_str(r"\\"),
++            b'\x20'..=b'\x7E' => repr.push(value as char),
++            _ => repr.push_str(&format!(r"\x{:02X}", value)),
++        }
++        repr.push('\'');
++        let mut token = match repr
++            .parse::<proc_macro2::TokenStream>()
++            .unwrap()
++            .into_iter()
++            .next()
++        {
++            Some(proc_macro2::TokenTree::Literal(token)) => token,
++            _ => unreachable!(),
++        };
+         token.set_span(span);
+         LitByte {
+             repr: Box::new(LitRepr {

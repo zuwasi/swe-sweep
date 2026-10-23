@@ -1,0 +1,80 @@
+diff --git a/examples/aliases/aliases.py b/examples/aliases/aliases.py
+index af3caa6..1b71d89 100644
+--- a/examples/aliases/aliases.py
++++ b/examples/aliases/aliases.py
+@@ -27,7 +27,7 @@ class Config:
+         parser.add_section("aliases")
+         for key, value in self.aliases.items():
+             parser.set("aliases", key, value)
+-        with open(filename, "wb") as file:
++        with open(filename, "w") as file:
+             parser.write(file)
+ 
+ 
+diff --git a/examples/imagepipe/imagepipe.py b/examples/imagepipe/imagepipe.py
+index e2d2f03..a79ae83 100644
+--- a/examples/imagepipe/imagepipe.py
++++ b/examples/imagepipe/imagepipe.py
+@@ -89,7 +89,7 @@ def open_cmd(images):
+         try:
+             click.echo(f"Opening '{image}'")
+             if image == "-":
+-                img = Image.open(click.get_binary_stdin())
++                img = Image.open(click.get_binary_stream("stdin"))
+                 img.filename = "-"
+             else:
+                 img = Image.open(image)
+@@ -182,7 +182,7 @@ def convert_flip(ctx, param, value):
+     if value in ("lr", "leftright"):
+         return (Image.FLIP_LEFT_RIGHT, "left to right")
+     if value in ("tb", "topbottom", "upsidedown", "ud"):
+-        return (Image.FLIP_LEFT_RIGHT, "top to bottom")
++        return (Image.FLIP_TOP_BOTTOM, "top to bottom")
+     raise click.BadParameter(f"invalid flip '{value}'")
+ 
+ 
+diff --git a/src/click/core.py b/src/click/core.py
+index e2ccf59..d373d4f 100644
+--- a/src/click/core.py
++++ b/src/click/core.py
+@@ -2760,7 +2760,7 @@ class Option(Parameter):
+             extra.append(_("required"))
+ 
+         if extra:
+-            extra_str = ";".join(extra)
++            extra_str = "; ".join(extra)
+             help = f"{help}  [{extra_str}]" if help else f"[{extra_str}]"
+ 
+         return ("; " if any_prefix_is_slash else " / ").join(rv), help
+@@ -2867,6 +2867,14 @@ class Option(Parameter):
+                 value = self.flag_value
+                 source = ParameterSource.COMMANDLINE
+ 
++        elif (
++            self.multiple
++            and value is not None
++            and any(v is _flag_needs_value for v in value)
++        ):
++            value = [self.flag_value if v is _flag_needs_value else v for v in value]
++            source = ParameterSource.COMMANDLINE
++
+         # The value wasn't set, or used the param's default, prompt if
+         # prompting is enabled.
+         elif (
+diff --git a/src/click/shell_completion.py b/src/click/shell_completion.py
+index 706fb69..500d8d7 100644
+--- a/src/click/shell_completion.py
++++ b/src/click/shell_completion.py
+@@ -102,10 +102,10 @@ _SOURCE_BASH = """\
+         IFS=',' read type value <<< "$completion"
+ 
+         if [[ $type == 'dir' ]]; then
+-            COMREPLY=()
++            COMPREPLY=()
+             compopt -o dirnames
+         elif [[ $type == 'file' ]]; then
+-            COMREPLY=()
++            COMPREPLY=()
+             compopt -o default
+         elif [[ $type == 'plain' ]]; then
+             COMPREPLY+=($value)

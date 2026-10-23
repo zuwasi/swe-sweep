@@ -1,0 +1,5 @@
+proj: build incomplete (continuing with recorded TUs)
+wrote 225 entries to cc.bdf
+proj [Recommended Rules]: Source Files to Check: 264, Violations Found: 1097
+proj [Flow Analysis Standard]: Source Files to Check: 360, Violations Found: 1118
+proj [Flow Analysis Aggressive]: Source Files to Check: 360, Violations Found: 1232
