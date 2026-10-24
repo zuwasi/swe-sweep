@@ -97,20 +97,15 @@ run_verifier "$TASK_DIR" --patch "patches/${AGENT}__${REPO}.diff"
 
 ## 5. The result: Amp 4/60, Claude Code 2/60
 
-| Entry | Model | Agent | Score | Cost |
-|---|---|---|---|---|
-| **ESL benchmark** | claude-opus-5-5 | **Amp (default)** | **4/60 = 6.7%** | est. $28-48 |
-| Official rank 1 | GPT-5.6 Sol (xhigh) | mini-SWE-agent | 4.7% | $7,230 |
-| **ESL benchmark** | claude-opus-5-5 | **Claude Code (headless)** | **2/60 = 3.3%** | est. $13-24 |
-| Official rank 5 | Opus 5 (xhigh) | mini-SWE-agent | 1.3% | $5,363 |
+> **[INSERT IMAGE 3 here]**
+> **Suggested headline: "The final scoreboard: same model on both arms, 4/60 vs 2/60"**
+> Image file: `C:\projects\swe-sweep\linkedin-images\3-scoreboard-table.png` (the scoreboard rendered as an image; use this instead of pasting the table text, which LinkedIn does not format)
+
+The same four rows as plain text, for reference: ESL benchmark, claude-opus-5-5, Amp (default), 4/60 = 6.7%, est. $28-48. Official rank 1, GPT-5.6 Sol (xhigh), mini-SWE-agent, 4.7%, $7,230. ESL benchmark, claude-opus-5-5, Claude Code (headless), 2/60 = 3.3%, est. $13-24. Official rank 5, Opus 5 (xhigh), mini-SWE-agent, 1.3%, $5,363.
 
 Amp resolved bugs in 4 of 12 repos (click, gson, proj, rxjava). Claude Code in 2 (tokio, rxjava). Amp finished all 12 sessions inside the one-hour cap. Three Claude Code sessions ended when the tool hit its own plan spend limit; the patches those sessions produced were still graded by the real verifier.
 
 One resolved bug is worth 1.67 points on a 60-bug subsample, so 4-vs-2 is directional evidence, not statistical proof. But it points the same way as everything else we have measured.
-
-> **[INSERT IMAGE 3 here]**
-> **Suggested headline: "The final scoreboard: same model on both arms, 4/60 vs 2/60"**
-> Image file: `C:\Users\danie\amp-demos\link_s9c.png` (slide 9 of the deck)
 
 ---
 
