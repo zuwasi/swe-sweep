@@ -10,18 +10,20 @@ This article explains what we did, what the agents got right and wrong, why we a
 
 ## Table of Contents
 
-1. [What SWE-sweep is](#1-what-swe-sweep-is)
-2. [What the benchmark's own authors say about harnesses](#2-what-the-benchmarks-own-authors-say-about-harnesses)
-3. [The academic context: the harness debate](#3-the-academic-context-the-harness-debate)
-4. [Our experiment: hold the model, vary the harness](#4-our-experiment-hold-the-model-vary-the-harness)
-5. [The result: Amp 4/60, Claude Code 2/60](#5-the-result-amp-460-claude-code-260)
-6. [The bugs, up close: what the agents fixed and what they failed](#6-the-bugs-up-close-what-the-agents-fixed-and-what-they-failed)
-7. [Before this: the quantum-compiler study said the same thing](#7-before-this-the-quantum-compiler-study-said-the-same-thing)
-8. [The Parasoft C++test control: 0 to 0.3%](#8-the-parasoft-cptest-control-0-to-03)
-9. [Why the harness is the king](#9-why-the-harness-is-the-king)
-10. [Honest limitations](#10-honest-limitations)
-11. [What to do Monday](#11-what-to-do-monday)
-12. [Links and full transparency](#12-links-and-full-transparency)
+1. What SWE-sweep is
+2. What the benchmark's own authors say about harnesses
+3. The academic context: the harness debate
+4. Our experiment: hold the model, vary the harness
+5. The result: Amp 4/60, Claude Code 2/60
+6. The bugs, up close: what the agents fixed and what they failed
+7. Before this: the quantum-compiler study said the same thing
+8. The Parasoft C++test control: 0 to 0.3%
+9. Why the harness is the king
+10. Honest limitations
+11. What to do Monday
+12. Links and full transparency
+
+(The table of contents is a reader's map only. LinkedIn articles do not support in-article anchor links, so the items above are not clickable. Section headings below use the same numbering.)
 
 The companion slide deck (24 slides, every diff and verifier output shown): [The Harness Is the King, presentation](https://zuwasi.github.io/Public-html-pages/swe-sweep-harness-king/index.html)
 
