@@ -11,7 +11,6 @@ table{border-collapse:collapse;width:100%}
 th,td{border:1px solid #cfd4da;padding:8px 12px;text-align:left}
 th{background:#f3f6f8}
 li{margin:8px 0}
-.insert{background:#fff8e1;border:1px dashed #ffb30b;padding:10px 14px;border-radius:6px}
 </style></head><body>
 <h1>The Harness Is the King: We Ran Amp and Claude Code on Meta's SWE-sweep. The Agent Framework Decided the Outcome.</h1>
 <p><strong>By Daniel Liezrowice, CTO, ESL - Engineering Software Lab</strong></p>
@@ -78,13 +77,13 @@ Image file: <code>C:\Users\danie\amp-demos\link_s6_live.png</code> (slide 6 of t
 <h2>4. Our experiment: hold the model, vary the harness</h2>
 <p>We built a small harness, <strong>mini-swe-sweep</strong>, that gives both agents identical treatment. Everything is public and reconstructable: <a href="https://github.com/zuwasi/swe-sweep">github.com/zuwasi/swe-sweep</a> and <a href="https://github.com/zuwasi/mini-swe-sweep">github.com/zuwasi/mini-swe-sweep</a>.</p>
 <p>The core loop is deliberately boring:</p>
-<p>```</p>
-<h1>run_agent.sh (core): identical loop for both CLIs</h1>
-<p>cd "$REPO" &amp;&amp; timeout 3600 "$AGENT_CLI" &lt; prompt.md &gt; session.log
-git diff &gt; "patches/${AGENT}__${REPO}.diff"</p>
-<h1>eval.sh: replay into the official SWE-sweep task image</h1>
-<p>run_verifier "$TASK_DIR" --patch "patches/${AGENT}__${REPO}.diff"
-```</p>
+<pre><code># run_agent.sh (core): identical loop for both CLIs
+cd &quot;$REPO&quot; &amp;&amp; timeout 3600 &quot;$AGENT_CLI&quot; &lt; prompt.md &gt; session.log
+git diff &gt; &quot;patches/${AGENT}__${REPO}.diff&quot;
+
+# eval.sh: replay into the official SWE-sweep task image
+run_verifier &quot;$TASK_DIR&quot; --patch &quot;patches/${AGENT}__${REPO}.diff&quot;
+</code></pre>
 <ul>
 <li><strong>Two arms, one model:</strong> Amp (default mode) and Claude Code (headless defaults), both running <code>claude-opus-5-5</code>. The harness is the only variable.</li>
 <li><strong>12 repositories</strong> spanning C, C++, C#, F#, Java, Python and Rust: libexpat, click, gson, roslyn, z3, tokio, hdf5, proj, black, rxjava, fsharp, syn.</li>
@@ -104,14 +103,12 @@ Image file: <code>C:\projects\swe-sweep\linkedin-images\3-scoreboard-table.png</
 <h2>6. The bugs, up close: what the agents fixed and what they failed</h2>
 <h3>What Amp got right: click (Python)</h3>
 <p>Two Python 3 API bugs in bundled examples: a config example writing bytes to a file opened for text, and a call to a removed private helper replaced by the public stream API.</p>
-<p>```
--        with open(filename, "wb") as file:
-+        with open(filename, "w") as file:      # configparser.write needs text mode</p>
-<ul>
-<li>img = Image.open(click.get_binary_stdin())</li>
-<li>img = Image.open(click.get_binary_stream("stdin"))
-```</li>
-</ul>
+<pre><code>-        with open(filename, &quot;wb&quot;) as file:
++        with open(filename, &quot;w&quot;) as file:      # configparser.write needs text mode
+
+-                img = Image.open(click.get_binary_stdin())
++                img = Image.open(click.get_binary_stream(&quot;stdin&quot;))
+</code></pre>
 <p>Small, surgical, exactly at the failing lines. Hidden tests passed, original suite stayed green. This is the discipline pattern we saw across all four Amp wins: locate, minimally fix, stop.</p>
 <h3>What Claude Code got right: tokio (Rust)</h3>
 <p>Two latent bugs in one patch: the macro's requires-argument list was missing <code>crate</code>, and <code>size_hint</code> could overflow on huge stream maps (fixed with <code>saturating_add</code>). 553 diff lines total, scored 1/5 with a clean regression gate. A real, minimal, correct fix.</p>
